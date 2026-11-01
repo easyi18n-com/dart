@@ -1,0 +1,2 @@
+exit|64
+out|{"error":{"message":"This command does not support --json yet.","code":"json_unsupported","statusCode":null,"retryable":false}}

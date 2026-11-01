@@ -37,6 +37,9 @@ class ExtractionResult {
     required this.dynamics,
     required this.filesScanned,
     this.scopeFile,
+    this.scopeNamesBaseUrl = false,
+    this.appFile,
+    this.appLocalized = false,
   });
 
   /// Extractable units, deduped by (source, ctx) and sorted for stable output.
@@ -47,8 +50,21 @@ class ExtractionResult {
 
   final int filesScanned;
 
-  /// First file (relative path) where an `Easyi18nScope(...)` is constructed —
-  /// AST-level, so a mention in a comment or string doesn't count. Null when
-  /// the scope is not mounted in the scanned tree.
+  /// First file in path order (relative) where an `Easyi18nScope(...)` is
+  /// constructed — AST-level, so a mention in a comment or string doesn't
+  /// count. Null when the scope is not mounted in the scanned tree.
   final String? scopeFile;
+
+  /// Whether that construction names a `baseUrl:` argument. Only the name is
+  /// read: a scope wired to a variable counts, a scope on the SDK default
+  /// does not.
+  final bool scopeNamesBaseUrl;
+
+  /// First file in path order constructing a `MaterialApp(...)` /
+  /// `MaterialApp.router(...)`, null when none is built in the scanned tree.
+  final String? appFile;
+
+  /// Whether that construction names both `localizationsDelegates` and
+  /// `supportedLocales`, without which `tr()` resolves `en_US` only.
+  final bool appLocalized;
 }

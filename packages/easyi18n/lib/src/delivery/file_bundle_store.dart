@@ -8,7 +8,7 @@ import 'bundle_store.dart';
 /// under [dir]:
 ///
 /// ```
-/// {dir}/state-{channel}.json            ← delivery state (etag + hash pointer)
+/// {dir}/state-{channel}.json            ← etag, manifest and hash pointer
 /// {dir}/bundles/{locale}/{hash}.json    ← immutable, content-addressed
 /// ```
 ///

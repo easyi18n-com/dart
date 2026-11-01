@@ -1,0 +1,8 @@
+exit|0
+out|1 call site(s) to update (1 file(s) scanned):
+out|  lib/app.dart:1
+out|  tr('Helo') -> tr('Hello')
+err|warning: 1 change(s) had no matching literal (already updated, or the call uses a variable/interpolation):
+out|  tr('Bye') ctx:button
+out|
+out|Preview only. Re-run with --write to apply.

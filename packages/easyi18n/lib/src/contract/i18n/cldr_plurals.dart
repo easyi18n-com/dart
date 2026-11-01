@@ -1,9 +1,16 @@
-/// CLDR plural categories for a given language code.
+/// CLDR plural categories for a given locale.
 ///
-/// Source: Unicode CLDR plural rules v45 (matches Flutter's `intl` package).
-/// Only the language portion of the locale is consulted: `pt-BR` and `pt-PT`
-/// share categories with `pt`.
+/// The table is GENERATED from the Unicode CLDR cardinal plural rules by
+/// `tool/gen-cldr-plurals.py` (see `cldr_plural_data.dart`), and gated against
+/// the vendored upstream file by `test/i18n/cldr_source_agreement_test.dart` —
+/// it is never edited by hand.
+///
+/// Lookup honours a region: CLDR states rules for `pt-PT` separately from `pt`
+/// (European Portuguese keeps `0` plural, Brazilian does not), so the full
+/// locale is tried before falling back to the language subtag.
 library;
+
+part 'cldr_plural_data.dart';
 
 /// CLDR plural categories. The set returned by [pluralFormsFor] is a subset
 /// of these.
@@ -13,167 +20,97 @@ enum PluralCategory { zero, one, two, few, many, other }
 /// `other` is always present (every CLDR language has it). Order is
 /// canonical CLDR order - important for golden tests where the emitted
 /// `{count, plural, ...}` strings must be byte-stable.
-List<PluralCategory> pluralFormsFor(String langCode) {
-  final lang = _baseLang(langCode);
-  return _rules[lang] ?? const [PluralCategory.other];
+///
+/// An unmodelled language gets [kPluralFallbackCategories]; ask
+/// [isPluralModelled] when the difference matters.
+List<PluralCategory> pluralFormsFor(String langCode) =>
+    lookupPluralTable(_kCldrCategories, langCode) ?? _fallbackCategories;
+
+/// Whether CLDR categories are stated for [langCode], as opposed to guessed.
+/// CLDR states rules for 217 locales, 210 of which are among the catalogue's
+/// 638 base languages: the fallback still answers for the other 428, so it is
+/// reachable — just no longer the common case.
+// NOT the guard for a gettext consumer — `gettextRuleFor(...).isModelled` is.
+// This answers "does CLDR state CATEGORIES", which is a weaker question than
+// "do we have a rule": the two tables differ by well over a hundred locales, so
+// `sl` is CLDR-modelled with four categories while its gettext answer is the
+// 2-form guess, and `hi` is CLDR-modelled with the same two categories as the
+// fallback but the opposite boundary (CLDR `hi one` is `i = 0 or n = 1`, so
+// zero is singular). Both flags are pinned per locale in the `pluralForms`
+// block of `contract_vectors.json` (#486), with rows that disagree.
+//
+// wired-ignore: published for consumers outside this repo. R8 reports this as
+// called, but those "call sites" are the [isPluralModelled] links in the
+// docblocks above.
+bool isPluralModelled(String langCode) =>
+    lookupPluralTable(_kCldrCategories, langCode) != null;
+
+/// Resolves [langCode] against a table keyed by lowercase, `-` separated
+/// locales, truncating one subtag at a time: `pt-PT` before `pt`, so a
+/// region-specific rule wins over its language's.
+///
+/// Shared with `gettext_rules.dart` so both tables answer the same locale the
+/// same way — a rule that applied to `pt` but not to `pt-PT` in one table and
+/// not the other is the drift the agreement test exists to catch.
+///
+/// This replaced a `basePluralLanguage` that dropped region and script before
+/// the lookup: with it, one of `pt` / `pt-PT` was always answered with the
+/// other's rule. A port of these tables has to port this resolution too.
+T? lookupPluralTable<T>(Map<String, T> table, String langCode) {
+  final subtags = langCode.toLowerCase().replaceAll('_', '-').split('-');
+  final hit = table[subtags.join('-')];
+  if (hit != null) return hit;
+
+  // `pt-Latn-PT` must not answer with Brazil's rule: truncating right-to-left
+  // drops the region before the script, so try language+region on the way
+  // down. Region is a 2-letter or 3-digit subtag (BCP-47).
+  final region = subtags.skip(1).firstWhere(
+        (s) => RegExp(r'^([a-z]{2}|[0-9]{3})$').hasMatch(s),
+        orElse: () => '',
+      );
+  if (subtags.length > 2 && region.isNotEmpty) {
+    final byRegion = table['${subtags.first}-$region'];
+    if (byRegion != null) return byRegion;
+  }
+
+  for (var i = subtags.length - 1; i > 0; i--) {
+    final byPrefix = table[subtags.take(i).join('-')];
+    if (byPrefix != null) return byPrefix;
+  }
+  return null;
 }
 
-String _baseLang(String code) {
-  final i = code.indexOf(RegExp('[-_]'));
-  return (i < 0 ? code : code.substring(0, i)).toLowerCase();
-}
-
-const List<PluralCategory> _oneOther = [
+/// What an unmodelled language is assumed to do, shared by the CLDR categories
+/// and the gettext rule so the two cannot drift apart again.
+///
+/// Two forms, not one. The alternative — collapsing to `other` — reads as
+/// "this language has no singular", which silently drops the singular field
+/// from the editor, from the fill prompt and from every export. Two forms is
+/// still a **guess**: it is wrong for a language whose singular is not
+/// `n == 1` (French is `n > 1`, and it is only right because it is modelled).
+/// Anything that cannot absorb a wrong plural must branch on the flag for the
+/// table it is reading — [isPluralModelled] for the categories, and
+/// `gettextRuleFor(...).isModelled` for the rule. They are not
+/// interchangeable: the gettext table states far fewer locales, so a locale
+/// can be CLDR-modelled and still get the guessed header.
+///
+/// Named in backticks rather than linked: this file is vendored verbatim into
+/// the published SDK, which does not ship the gettext table, so a doc link
+/// here would resolve in core and dangle there.
+const List<PluralCategory> kPluralFallbackCategories = [
   PluralCategory.one,
   PluralCategory.other,
 ];
 
-const List<PluralCategory> _otherOnly = [PluralCategory.other];
+/// The `Plural-Forms` header matching [kPluralFallbackCategories].
+const String kPluralFallbackHeader = 'nplurals=2; plural=(n != 1);';
 
-const Map<String, List<PluralCategory>> _rules = {
-  // 1 form
-  'ja': _otherOnly,
-  'ko': _otherOnly,
-  'zh': _otherOnly,
-  'th': _otherOnly,
-  'vi': _otherOnly,
-  'id': _otherOnly,
-  'ms': _otherOnly,
-  'my': _otherOnly,
-  'lo': _otherOnly,
-  'km': _otherOnly,
+/// [kPluralFallbackCategories] as CLDR names, for the gettext table (a const
+/// cannot map an enum). The two are kept in step by
+/// `plural_rules_agreement_test.dart`, which compares them directly.
+const List<String> kPluralFallbackFormNames = ['one', 'other'];
 
-  // 2 forms (one, other)
-  'en': _oneOther,
-  'es': _oneOther,
-  'de': _oneOther,
-  'it': _oneOther,
-  'pt': _oneOther,
-  'nl': _oneOther,
-  'sv': _oneOther,
-  'da': _oneOther,
-  'no': _oneOther,
-  'nb': _oneOther,
-  'nn': _oneOther,
-  'fi': _oneOther,
-  'tr': _oneOther,
-  'hu': _oneOther,
-  'el': _oneOther,
-  'he': _oneOther,
-  'bg': _oneOther,
-  'et': _oneOther,
-  'eu': _oneOther,
-  'ca': _oneOther,
-  'gl': _oneOther,
-
-  // French + variants: 1/many/other (CLDR v45 added many for French)
-  'fr': [PluralCategory.one, PluralCategory.many, PluralCategory.other],
-
-  // Polish: one/few/many/other
-  'pl': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-
-  // Russian / Ukrainian / Belarusian / Serbian / Croatian / Bosnian: one/few/many/other
-  'ru': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-  'uk': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-  'be': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-  'sr': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.other,
-  ],
-  'hr': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.other,
-  ],
-  'bs': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.other,
-  ],
-
-  // Czech / Slovak: one/few/many/other
-  'cs': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-  'sk': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-
-  // Arabic: full 6-form
-  'ar': [
-    PluralCategory.zero,
-    PluralCategory.one,
-    PluralCategory.two,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-
-  // Welsh: full 6-form too
-  'cy': [
-    PluralCategory.zero,
-    PluralCategory.one,
-    PluralCategory.two,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-
-  // Romanian: one/few/other
-  'ro': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.other,
-  ],
-  // Lithuanian: one/few/many/other
-  'lt': [
-    PluralCategory.one,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-  // Latvian: zero/one/other
-  'lv': [
-    PluralCategory.zero,
-    PluralCategory.one,
-    PluralCategory.other,
-  ],
-  // Irish Gaelic: one/two/few/many/other
-  'ga': [
-    PluralCategory.one,
-    PluralCategory.two,
-    PluralCategory.few,
-    PluralCategory.many,
-    PluralCategory.other,
-  ],
-};
+const List<PluralCategory> _fallbackCategories = kPluralFallbackCategories;
 
 extension PluralCategoryName on PluralCategory {
   /// CLDR canonical lowercase name (`one`, `other`, `few`, ...).

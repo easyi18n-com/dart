@@ -1,0 +1,4 @@
+exit|0
+out|Language "fr" is on the project (fill mode: ai).
+out|The next push or sync fills it with AI.
+out|Next: easyi18n status (requires the read scope).

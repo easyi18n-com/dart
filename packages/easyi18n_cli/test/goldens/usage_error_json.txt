@@ -1,0 +1,2 @@
+exit|64
+out|{"error":{"message":"Could not find an option named \"--bogus\".","code":"usage_error","statusCode":null,"retryable":false}}

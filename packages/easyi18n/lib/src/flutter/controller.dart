@@ -53,23 +53,31 @@ class Easyi18nController extends ChangeNotifier {
     BundleStore? store,
   }) async {
     final resolvedStore = store ?? await createBundleStore();
+    final client = httpClient ?? http.Client();
     final delivery = DeliveryService(
-      client: CdnClient(httpClient ?? http.Client()),
+      client: CdnClient(client),
       store: resolvedStore,
       manifestUrl: buildManifestUrl(baseUrl, projectId, channel),
       channel: channel,
     );
-    return Easyi18nController(
+    final controller = Easyi18nController(
       supportedLocales: supportedLocales,
       delivery: delivery,
       bakedLoader: bakedLoader,
     );
+    if (httpClient == null) controller._ownedClient = client;
+    return controller;
   }
 
   final List<String> supportedLocales;
   final DeliveryService _delivery;
   final BakedLoader? _bakedLoader;
   final CaptureReporter? _capture;
+
+  /// The client [create] BUILT, or null when the caller injected one (or built
+  /// the controller directly). Closing an injected client would take down a
+  /// connection pool the caller still uses, so only the owned one is closed.
+  http.Client? _ownedClient;
 
   /// Builds the id-only capture endpoint once the manifest reveals the project
   /// id (F1 B4 — the delivery ref may be a `@handle/slug` pair with no id). Null
@@ -235,6 +243,10 @@ class Easyi18nController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _capture?.dispose();
+    // On IO an `http.Client` wraps a `dart:io` connection pool and each
+    // returned socket arms a 15 s idle Timer that only `close()` cancels
+    // (#1545).
+    _ownedClient?.close();
     super.dispose();
   }
 }

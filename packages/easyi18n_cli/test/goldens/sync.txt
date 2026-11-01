@@ -1,0 +1,8 @@
+exit|0
+out|Target languages (1): en
+out|Would sync: 2 new, 0 updated, 0 unchanged source(s); 1 translation(s) imported; 1 conflict(s): 1 kept on the server — ~12 credits to translate
+err|warning: Conflict: Hola [en] — kept the project's value (written); the catalog carries a different one. Pull first, or pass --on-conflict file to import the catalog's value over it.
+out|Published version 2026.08.11.1 (2 keys).
+out|  The server did not report when this version was published; dating this pull by the local clock.
+out|Wrote the translated catalog (version 2026.08.11.1) to <tmp>/App/Localizable.xcstrings
+out|Sync complete (version 2026.08.11.1).

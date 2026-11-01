@@ -112,6 +112,17 @@ class Easyi18nScope extends StatefulWidget {
       .dependOnInheritedWidgetOfExactType<_Easyi18nInherited>()
       ?.notifier;
 
+  /// The locales the app can offer, for `MaterialApp.supportedLocales`: the
+  /// scope's declared locales plus every locale the delivery manifest
+  /// advertises, as a refresh learns them. Registers the caller as a
+  /// dependency, so the app re-resolves its locale when a published language
+  /// arrives. `[Locale('en')]` when no scope is mounted.
+  static List<Locale> localesOf(BuildContext context) {
+    final tags = of(context)?.availableLocales;
+    if (tags == null || tags.isEmpty) return const [Locale('en')];
+    return [for (final tag in tags) localeFromTag(tag)];
+  }
+
   @override
   State<Easyi18nScope> createState() => _Easyi18nScopeState();
 }
@@ -122,12 +133,27 @@ class _Easyi18nScopeState extends State<Easyi18nScope> {
   AppLifecycleListener? _lifecycle;
   Timer? _pollTimer;
 
+  /// The client this state BUILT, or null when the caller injected one through
+  /// [Easyi18nScope.httpClient]. Closing an injected client would take down a
+  /// connection pool the caller still uses, so only the owned one is closed.
+  http.Client? _ownedClient;
+
+  /// The locale of the topmost [Localizations] under this scope (the one
+  /// `MaterialApp` builds), for a `tr` called above it (#2472).
+  String? _appLocale;
+
+  /// Set once a `tr` above the app's [Localizations] has built. From then on
+  /// the app's locale is read after every frame: a language switch made below
+  /// that `tr` rebuilds `MaterialApp`, not the widget that called it (#2491).
+  bool _readerAbove = false;
+
   @override
   void initState() {
     super.initState();
     _ownsController = widget.controller == null;
     _controller = widget.controller ?? _build();
     setAmbientController(_controller);
+    WidgetsBinding.instance.addPostFrameCallback(_readAppLocale);
     if (_ownsController) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _controller.init());
       // Live-swap triggers: pull a freshly-published version into the running
@@ -147,7 +173,7 @@ class _Easyi18nScopeState extends State<Easyi18nScope> {
 
   Easyi18nController _build() {
     final base = widget.baseUrl ?? Uri.parse(kDefaultBaseUrl);
-    final client = widget.httpClient ?? http.Client();
+    final client = widget.httpClient ?? (_ownedClient = http.Client());
     final storeFuture = widget.store != null
         ? Future<BundleStore>.value(widget.store!)
         : createBundleStore();
@@ -198,23 +224,108 @@ class _Easyi18nScopeState extends State<Easyi18nScope> {
     }
   }
 
+  void _markReaderAbove() => _readerAbove = true;
+
+  /// Reads the app's locale once each frame is built, while this scope is
+  /// mounted: a `context` can't walk its children during build. Rebuilds the
+  /// readers above only when it moved, so a settled app schedules no frame.
+  void _readAppLocale(Duration _) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback(_readAppLocale);
+    if (!_readerAbove) return;
+    final tag = _topmostLocalizations()?.locale.toLanguageTag();
+    if (tag != _appLocale) setState(() => _appLocale = tag);
+  }
+
+  /// Breadth-first, so an inner `Localizations.override` never stands in for
+  /// the app's own.
+  Localizations? _topmostLocalizations() {
+    final queue = <Element>[];
+    context.visitChildElements(queue.add);
+    for (var i = 0; i < queue.length; i++) {
+      final widget = queue[i].widget;
+      if (widget is Localizations) return widget;
+      queue[i].visitChildren(queue.add);
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _pollTimer?.cancel();
     _lifecycle?.dispose();
     clearAmbientController(_controller);
     if (_ownsController) _controller.dispose();
+    // On IO an `http.Client` wraps a `dart:io` connection pool: a drained body
+    // returns its socket to that pool and arms a 15 s idle Timer that only
+    // `close()` cancels. Every unmounted scope would otherwise hold a socket
+    // (#1545), and under `flutter test` the timer lands in the binding's fake
+    // zone and trips the pending-timer assertion after unmount.
+    _ownedClient?.close();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) =>
-      _Easyi18nInherited(notifier: _controller, child: widget.child);
+  Widget build(BuildContext context) => _Easyi18nInherited(
+        notifier: _controller,
+        appLocale: _appLocale,
+        markReaderAbove: _markReaderAbove,
+        child: widget.child,
+      );
 }
 
 class _Easyi18nInherited extends InheritedNotifier<Easyi18nController> {
   const _Easyi18nInherited({
     required Easyi18nController super.notifier,
+    required this.appLocale,
+    required this.markReaderAbove,
     required super.child,
   });
+
+  final String? appLocale;
+  final VoidCallback markReaderAbove;
+
+  @override
+  bool updateShouldNotify(_Easyi18nInherited oldWidget) =>
+      super.updateShouldNotify(oldWidget) || oldWidget.appLocale != appLocale;
+}
+
+/// The locale for a `tr` whose [context] has no [Localizations] above it, such
+/// as the widget that builds `MaterialApp` (#2472): the app's locale as last
+/// read under the scope, and until then the device's locales resolved against
+/// [Easyi18nScope.localesOf], as `MaterialApp` resolves them by default. Null
+/// without a scope.
+String? appLocaleAbove(BuildContext context) {
+  final scope =
+      context.dependOnInheritedWidgetOfExactType<_Easyi18nInherited>();
+  if (scope == null) return null;
+  scope.markReaderAbove();
+  return scope.appLocale ??
+      basicLocaleListResolution(
+        WidgetsBinding.instance.platformDispatcher.locales,
+        Easyi18nScope.localesOf(context),
+      ).toLanguageTag();
+}
+
+/// A delivery locale tag (`en`, `pt-br`, `zh-hant`, `es-419`, `sr_Latn_RS`)
+/// as a [Locale] with Flutter's subtag casing, so it compares equal to the
+/// platform's own. A part outside language[-script][-region] ends the parse.
+Locale localeFromTag(String tag) {
+  final parts = tag.trim().split(RegExp('[-_]'));
+  String? script;
+  String? region;
+  for (final part in parts.skip(1)) {
+    if (part.length == 4 && script == null && region == null) {
+      script = part[0].toUpperCase() + part.substring(1).toLowerCase();
+    } else if ((part.length == 2 || part.length == 3) && region == null) {
+      region = part.toUpperCase();
+    } else {
+      break;
+    }
+  }
+  return Locale.fromSubtags(
+    languageCode: parts.first.toLowerCase(),
+    scriptCode: script,
+    countryCode: region,
+  );
 }

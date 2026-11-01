@@ -1,0 +1,6 @@
+exit|0
+out|  The server did not report when this version was published; dating this pull by the local clock.
+out|Pulled 2 file(s) for proj_abc (version 2026.06.26) into <tmp>/lib/l10n
+out|  app_en.arb
+out|  app_es.arb
+out|Run 'flutter gen-l10n' to regenerate your localizations.

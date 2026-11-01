@@ -1,0 +1,5 @@
+exit|1
+out|remote: 2026.07.04.3
+out|local:  2026.07.04.1 (pulled <ago>)
+out|  catalog: App/Localizable.xcstrings
+out|Out of date - 2 publishes behind - run 'easyi18n pull'.

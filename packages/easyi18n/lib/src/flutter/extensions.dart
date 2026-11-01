@@ -24,10 +24,13 @@ extension Easyi18nContext on BuildContext {
   /// Translate [source] (source-as-key), interpolating [args]. Registers a
   /// dependency on the hot-swap notifier so the widget rebuilds when a new
   /// bundle lands. Locale comes from the nearest [Localizations] (the dev's
-  /// `MaterialApp.locale` / `supportedLocales`).
+  /// `MaterialApp.locale` / `supportedLocales`); above it, in the widget that
+  /// builds `MaterialApp`, from the locale the app below runs in.
   String tr(String source, {String? ctx, Map<String, Object> args = const {}}) {
     final controller = Easyi18nScope.of(this);
-    final locale = Localizations.maybeLocaleOf(this)?.toLanguageTag() ?? 'en';
+    final locale = Localizations.maybeLocaleOf(this)?.toLanguageTag() ??
+        appLocaleAbove(this) ??
+        'en';
     if (controller == null) {
       return _rawResolver.resolve(
         source: source,

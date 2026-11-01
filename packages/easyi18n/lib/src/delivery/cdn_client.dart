@@ -116,7 +116,8 @@ class CdnClient {
           'manifest tokenAlgoVersions ${manifest.tokenAlgoVersions} '
           'lacks $kMessageTokenAlgoVersion');
     }
-    return ManifestUpdated(manifest, res.headers['etag'] ?? etag);
+    // Not the etag we sent: it validates the previous manifest, not this one.
+    return ManifestUpdated(manifest, res.headers['etag']);
   }
 
   /// GET + verify one immutable bundle. Rejects an unknown future schema and a

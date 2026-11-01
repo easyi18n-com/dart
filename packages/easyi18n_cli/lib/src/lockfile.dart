@@ -116,8 +116,9 @@ class Lockfile {
       final ctx = raw['ctx'];
       units.add(LockUnit(source: source, ctx: ctx is String ? ctx : null));
     }
+    final rawProject = parsed['project'];
     return Lockfile(
-      project: parsed['project'] as String? ?? project,
+      project: rawProject is String ? rawProject : project,
       units: units,
     );
   }

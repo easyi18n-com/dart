@@ -103,14 +103,16 @@ final RegExp _literalSelector = RegExp(r'^=(\d+)$');
 
 String _canonicalPlural(Map<String, String> forms) {
   final cldrNames = {for (final c in PluralCategory.values) c.cldrName};
-  final literals = <int, String>{};
+  // BigInt: same bytes as `int` for every N that fits one, and no throw past
+  // it (#1923).
+  final literals = <BigInt, String>{};
   final cldr = <String, String>{};
   final nonCldr = <String, String>{};
 
   for (final entry in forms.entries) {
     final match = _literalSelector.firstMatch(entry.key);
     if (match != null) {
-      literals[int.parse(match.group(1)!)] = entry.value;
+      literals[BigInt.parse(match.group(1)!)] = entry.value;
     } else if (cldrNames.contains(entry.key)) {
       cldr[entry.key] = entry.value;
     } else {

@@ -1,0 +1,8 @@
+exit|0
+out|Scanned 1 file(s): 2 extractable tr() string(s).
+out|1 new since last push:
+out|  + "Goodbye"
+out|1 orphan(s) - in the lockfile but no longer in code (translations are kept; pass --prune to drop from the lockfile):
+out|  - "Retired copy"
+err|warning: 1 tr() call(s) with a non-literal source - these rely on runtime auto-capture, not static extraction:
+out|  lib/app.dart:4  c.tr(name)

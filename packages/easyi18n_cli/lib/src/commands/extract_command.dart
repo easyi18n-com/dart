@@ -1,22 +1,19 @@
-import 'dart:io';
-
 import 'package:args/command_runner.dart';
-import 'package:path/path.dart' as p;
 
+import '../cli_output.dart';
 import '../config.dart';
 import '../extract/extraction_report.dart';
 import '../extract/tr_extractor.dart';
-import '../lockfile.dart';
+import '../extract_runner.dart';
 import '../logger.dart';
 
 /// `easyi18n extract` - statically scan the source tree for `tr()` calls and
 /// print what would be registered, what's new, and what's orphaned versus the
 /// lockfile. Read-only and offline: it never writes the lockfile or contacts the
 /// backend (that's `push`). Useful as a CI drift check or before a push.
-class ExtractCommand extends Command<int> {
-  ExtractCommand({required CliLogger logger, TrExtractor? extractor})
-    : _logger = logger,
-      _extractor = extractor ?? TrExtractor() {
+class ExtractCommand extends Command<int> with JsonPresenter {
+  ExtractCommand({required this.output, TrExtractor? extractor})
+    : _runner = ExtractRunner(extractor: extractor) {
     argParser
       ..addOption(
         'source-dir',
@@ -30,8 +27,9 @@ class ExtractCommand extends Command<int> {
       );
   }
 
-  final CliLogger _logger;
-  final TrExtractor _extractor;
+  final CliOutput output;
+  final ExtractRunner _runner;
+  CliLogger get _logger => output.logger;
 
   @override
   String get name => 'extract';
@@ -45,25 +43,20 @@ class ExtractCommand extends Command<int> {
     final results = argResults!;
     final configPath =
         globalResults?['config'] as String? ?? Easyi18nConfig.fileName;
-    final config = Easyi18nConfig.load(File(configPath));
-    final root = p.dirname(configPath);
-
-    final sourceDir = Directory(p.join(root, results['source-dir'] as String));
-    final extraction = _extractor.extractFromDirectory(
-      sourceDir,
-      relativeTo: root,
+    final result = _runner.run(
+      configPath: configPath,
+      sourceDir: results['source-dir'] as String,
+      logger: _logger,
     );
+    // JSON uses outputQuiet to suppress info/detail; shared warnings/errors
+    // still reach stderr, including any added to this report later.
+    reportExtraction(_logger, result.extraction, result.diff);
+    if (output.json) {
+      output.emit(result.toJson());
+    }
 
-    final lock = Lockfile.loadOrEmpty(
-      File(p.join(root, Lockfile.fileName)),
-      // Inert seed: extract only diffs the lockfile, never writes it.
-      project: config.ref.lockSeed,
-    );
-    final diff = lock.diff(extraction.units);
-    reportExtraction(_logger, extraction, diff);
-
-    if ((results['fail-on-orphans'] as bool) && diff.removed.isNotEmpty) {
-      _logger.error('${diff.removed.length} orphan(s) found.');
+    if ((results['fail-on-orphans'] as bool) && result.orphans > 0) {
+      _logger.error('${result.orphans} orphan(s) found.');
       return 1;
     }
     return 0;

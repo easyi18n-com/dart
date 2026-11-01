@@ -6,6 +6,9 @@ import 'contract.dart';
 import 'exceptions.dart';
 import 'http_capped.dart';
 
+/// Builds the public delivery client used by the runtime health checks.
+typedef DeliveryClientFactory = DeliveryClient Function({required String baseUrl});
+
 /// Thin client over the **public, unauthenticated** delivery origin
 /// (`GET /v1/projects/{id}/manifest` + the content-addressed bundles it points
 /// at). This is what the runtime SDK consumes; `doctor` fetches through it so
@@ -40,9 +43,15 @@ class DeliveryClient {
       _fetchManifestAt(manifestUriByRef(workspace, project));
 
   /// Fetches the delivery manifest at [uri], returning the raw probe (status +
-  /// headers) plus the parsed pointer on a 200. Network failures and malformed
-  /// field types throw [CliException]; HTTP errors do NOT throw — the caller
-  /// grades them.
+  /// headers) plus the parsed pointer on a 200. Network failures throw
+  /// [CliException]; HTTP errors do NOT throw — the caller grades them.
+  ///
+  /// Every field is TOLERANT: a value of the wrong type drops out (a bad
+  /// `locales` entry is skipped, a bad `tokenAlgoVersions` reads as empty) and
+  /// a body that is not a manifest at all surfaces as a null [revision], which
+  /// is what `doctor` already grades. Nothing here throws on shape — the
+  /// docstring used to claim it did, and the one field that actually threw did
+  /// it with a `TypeError` that escaped the caller's `on Exception` (#972).
   Future<ManifestProbe> _fetchManifestAt(Uri uri) async {
     final response = await _get(uri);
     final headers = {
@@ -81,9 +90,14 @@ class DeliveryClient {
       statusCode: response.statusCode,
       headers: headers,
       revision: _stringOrNull(body?['revision']),
-      tokenAlgoVersions: [
-        ...?(body?['tokenAlgoVersions'] as List?)?.whereType<String>(),
-      ],
+      // Tested, never cast, like `locales` above and `revision` below: a 200
+      // that is not a manifest is exactly what this probe exists to grade, and
+      // the `as List?` here threw a `TypeError` — an `Error`, which `doctor`'s
+      // `on Exception` cannot catch — straight out of the command (#972).
+      tokenAlgoVersions: switch (body?['tokenAlgoVersions']) {
+        final List l => l.whereType<String>().toList(),
+        _ => const <String>[],
+      },
       locales: locales,
       errorCode: _stringOrNull(body?['error']),
       errorMessage: _stringOrNull(body?['message']),
@@ -164,7 +178,7 @@ class DeliveryClient {
       );
     } on http.ClientException catch (e) {
       // Covers both connect failures and a connection dropped mid-body.
-      throw CliException('Could not reach ${uri.host}: ${e.message}');
+      throw TransientCliException('Could not reach ${uri.host}: ${e.message}');
     }
   }
 

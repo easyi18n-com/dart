@@ -2,31 +2,41 @@ import '../contract/models/bundle.dart';
 
 /// What the SDK persists between launches so it can serve the last-good
 /// translations offline before the network answers: the manifest validator
-/// (ETag) and the current `{locale → bundleHash}` pointer for a channel.
+/// (ETag), the manifest it validates and the current `{locale → bundleHash}`
+/// pointer for a channel.
 class DeliveryState {
-  const DeliveryState({this.manifestEtag, this.hashByLocale = const {}});
+  const DeliveryState(
+      {this.manifestEtag, this.hashByLocale = const {}, this.manifest});
 
   final String? manifestEtag;
   final Map<String, String> hashByLocale;
 
+  /// The manifest JSON [manifestEtag] validates. A 304 is decided against it,
+  /// so without it the SDK sends no `If-None-Match`.
+  final Map<String, dynamic>? manifest;
+
   DeliveryState copyWith({
     String? manifestEtag,
     Map<String, String>? hashByLocale,
+    Map<String, dynamic>? manifest,
   }) =>
       DeliveryState(
         manifestEtag: manifestEtag ?? this.manifestEtag,
         hashByLocale: hashByLocale ?? this.hashByLocale,
+        manifest: manifest ?? this.manifest,
       );
 
   Map<String, dynamic> toJson() => {
         if (manifestEtag != null) 'manifestEtag': manifestEtag,
         'hashByLocale': hashByLocale,
+        if (manifest != null) 'manifest': manifest,
       };
 
   factory DeliveryState.fromJson(Map<String, dynamic> json) => DeliveryState(
         manifestEtag: json['manifestEtag'] as String?,
         hashByLocale:
             (json['hashByLocale'] as Map?)?.cast<String, String>() ?? const {},
+        manifest: (json['manifest'] as Map?)?.cast<String, dynamic>(),
       );
 }
 

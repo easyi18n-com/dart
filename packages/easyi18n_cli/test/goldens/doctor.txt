@@ -1,0 +1,19 @@
+exit|0
+out|ok    <tmp>/easyi18n.yaml - project proj_abc
+out|ok    credential - EASYI18N_TOKEN set
+out|ok    <tmp>/AGENTS.md - easyi18n block up to date
+out|ok    <tmp>/pubspec.yaml - easyi18n is a dependency
+out|ok    <tmp>/pubspec.yaml - assets/easyi18n/ assets registered
+out|ok    <tmp>/macos/Runner/DebugProfile.entitlements - com.apple.security.network.client granted
+out|ok    <tmp>/macos/Runner/Release.entitlements - com.apple.security.network.client granted
+out|ok    <tmp>/lib/main.dart - Easyi18nScope mounted
+out|ok    <tmp>/lib/main.dart - Easyi18nScope sets its baseUrl
+out|ok    <tmp>/lib/main.dart - MaterialApp declares localizationsDelegates and supportedLocales
+out|ok    scan - 1 file(s), 1 extractable tr() string(s)
+out|ok    icu - 1 source string(s) lint clean
+out|ok    delivery - manifest reachable - revision 2026.07.09.1, 2 locale(s)
+out|ok    delivery - CORS allows browser fetches
+out|ok    <tmp>/assets/easyi18n/ - offline floor for 2 published locale(s)
+out|ok    scan - every tr() string is published
+out|info  scan - 1 published key(s) not referenced by any extracted tr() call (dynamic calls / other platforms?)
+out|All checks passed.

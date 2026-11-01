@@ -1,0 +1,5 @@
+exit|0
+err|warning: 2 cell(s) in the restored version fail ICU validation and are being served:
+err|warning:   apples [es]: plural value is missing the mandatory 'other' form
+err|warning:   ...and 1 more the server did not list.
+out|{"restored_from":"2026.07.08.2","version_id":"2026.07.09.4","key_count":3,"flagged":{"icu":["apples [es]: plural value is missing the mandatory 'other' form"],"icu_total":2,"markup":[],"markup_total":0},"project_dir":"<project>","base_url":"https://api.easyi18n.com"}

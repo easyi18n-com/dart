@@ -1,0 +1,1908 @@
+{
+  "sourceLanguage" : "es",
+  "strings" : {
+    "" : {
+
+    },
+    "¿Cuándo suena?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When does it ring?"
+          }
+        }
+      }
+    },
+    "\"%@\"" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\"%@\""
+          }
+        }
+      }
+    },
+    "\"Oye Siri, sácame de aquí\"" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\"Hey Siri, get me out of here\""
+          }
+        }
+      }
+    },
+    "%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld"
+          }
+        }
+      }
+    },
+    "%lld llamadas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld calls"
+          }
+        }
+      }
+    },
+    "%lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld/%lld"
+          }
+        }
+      }
+    },
+    "%lld/%lld caracteres" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld/%lld characters"
+          }
+        }
+      }
+    },
+    "🎙️ IA en vivo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎙️ Live AI"
+          }
+        }
+      }
+    },
+    "📈 Patrón: insistencia" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "📈 Pattern: persistence"
+          }
+        }
+      }
+    },
+    "A los %lld min" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In %lld min"
+          }
+        }
+      }
+    },
+    "A pantalla completa" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full Screen"
+          }
+        }
+      }
+    },
+    "Abre **Ajustes**." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open **Settings**."
+          }
+        }
+      }
+    },
+    "Abrir Ajustes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        }
+      }
+    },
+    "Abrir Atajos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Shortcuts"
+          }
+        }
+      }
+    },
+    "Abrir selector" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Picker"
+          }
+        }
+      }
+    },
+    "Acceso directo desde la pantalla bloqueada" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shortcut from the lock screen"
+          }
+        }
+      }
+    },
+    "Accesos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shortcuts"
+          }
+        }
+      }
+    },
+    "Activa tu salida sin tocar la pantalla." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activate your exit without touching the screen."
+          }
+        }
+      }
+    },
+    "Agrega tu primera salida para tenerla lista cuando la necesites." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add your first exit to have it ready when you need it."
+          }
+        }
+      }
+    },
+    "Ahora no" : {
+
+    },
+    "Ajustes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "Ajustes de la salida" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Output Settings"
+          }
+        }
+      }
+    },
+    "Ajustes de voz" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice Settings"
+          }
+        }
+      }
+    },
+    "Añadir" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        }
+      }
+    },
+    "Añadir otra llamada" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Another Call"
+          }
+        }
+      }
+    },
+    "Añadir tu primera salida" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Your First Exit"
+          }
+        }
+      }
+    },
+    "AÑADIR UN AUDIO" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ADD AN AUDIO"
+          }
+        }
+      }
+    },
+    "Anual" : {
+
+    },
+    "Apariencia" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appearance"
+          }
+        }
+      }
+    },
+    "Apple Watch" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Watch"
+          }
+        }
+      }
+    },
+    "Atajo de Siri" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siri Shortcut"
+          }
+        }
+      }
+    },
+    "Atendida" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attended"
+          }
+        }
+      }
+    },
+    "Audio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
+          }
+        }
+      }
+    },
+    "Audio de la llamada" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call Audio"
+          }
+        }
+      }
+    },
+    "Audio grabado, generado o IA en vivo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recorded, generated, or live AI audio"
+          }
+        }
+      }
+    },
+    "Aviso silencioso para ti, unos segundos antes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silent alert for you, a few seconds before"
+          }
+        }
+      }
+    },
+    "Baja del todo: **Tocar el dorso**." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scroll all the way down: **Tap the back**."
+          }
+        }
+      }
+    },
+    "Botones" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buttons"
+          }
+        }
+      }
+    },
+    "BUENAS NOCHES" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GOOD NIGHT"
+          }
+        }
+      }
+    },
+    "Buscar idioma o región" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search language or region"
+          }
+        }
+      }
+    },
+    "Cambiar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change"
+          }
+        }
+      }
+    },
+    "Cambiar de plan" : {
+
+    },
+    "Cancelar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "Cancelar o cambiar el método de pago se hace en los ajustes de tu cuenta de Apple." : {
+
+    },
+    "Cerrar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
+    },
+    "Cómo dispararla" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How to trigger it"
+          }
+        }
+      }
+    },
+    "Cómo se activa" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How it's activated"
+          }
+        }
+      }
+    },
+    "Cómo suena" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How it sounds"
+          }
+        }
+      }
+    },
+    "Con salida predeterminada" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With default output"
+          }
+        }
+      }
+    },
+    "Configura tu excusa antes de necesitarla." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up your excuse before you need it."
+          }
+        }
+      }
+    },
+    "Configurado" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configured"
+          }
+        }
+      }
+    },
+    "Configurar secuencia" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up sequence"
+          }
+        }
+      }
+    },
+    "Contacto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contact"
+          }
+        }
+      }
+    },
+    "Contenido sobre una tarjeta" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Content on a card"
+          }
+        }
+      }
+    },
+    "Continuar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
+          }
+        }
+      }
+    },
+    "Crea tu primera salida para tenerla lista cuando la necesites." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create your first exit to have it ready when you need it."
+          }
+        }
+      }
+    },
+    "Crea una salida antes: es la que sonará al hacer el gesto." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create an exit first: it's the one that will play when you trigger the gesture."
+          }
+        }
+      }
+    },
+    "Cuando dispares una salida, verás aquí cuándo y cuál usaste." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When you trigger an exit, you'll see here when and which one you used."
+          }
+        }
+      }
+    },
+    "Cuanto más concreto, más creíble la excusa." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The more specific, the more believable the excuse."
+          }
+        }
+      }
+    },
+    "Desarrollo" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Development"
+          }
+        }
+      }
+    },
+    "Deshabilitado" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disabled"
+          }
+        }
+      }
+    },
+    "Detalle (opcional)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detail (optional)"
+          }
+        }
+      }
+    },
+    "Detener" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop"
+          }
+        }
+      }
+    },
+    "Detener prueba" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop test"
+          }
+        }
+      }
+    },
+    "Detener prueba de IA" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop AI test"
+          }
+        }
+      }
+    },
+    "Disparar una llamada a mano es gratis, siempre y sin límite." : {
+
+    },
+    "Disparar una llamada desde la app es gratis. Que suene sin tocar la pantalla necesita plan." : {
+
+    },
+    "Disparo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trigger"
+          }
+        }
+      }
+    },
+    "Disparo discreto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discreet trigger"
+          }
+        }
+      }
+    },
+    "Editar salida" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit exit"
+          }
+        }
+      }
+    },
+    "Ej.: Hola, necesito que salgas urgente para la oficina…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "E.g.: Hi, I need you to leave for the office urgently…"
+          }
+        }
+      }
+    },
+    "Ej.: manzana" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "E.g.: apple"
+          }
+        }
+      }
+    },
+    "El tema sigue el ajuste del sistema por defecto. El idioma de la IA se elige en cada salida, no aquí." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The theme follows the system setting by default. The AI language is chosen per exit, not here."
+          }
+        }
+      }
+    },
+    "Elegir voz" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose voice"
+          }
+        }
+      }
+    },
+    "Elige **Toque triple**." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose **Triple Tap**."
+          }
+        }
+      }
+    },
+    "Eliminar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
+          }
+        }
+      }
+    },
+    "En la lista, toca **\"Salida inmediata\"**." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the list, tap **\"Immediate Exit\"**."
+          }
+        }
+      }
+    },
+    "En línea" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Online"
+          }
+        }
+      }
+    },
+    "En vivo (IA)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live (AI)"
+          }
+        }
+      }
+    },
+    "Entra en **Accesibilidad** → **Tocar**." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Go to **Accessibility** → **Touch**."
+          }
+        }
+      }
+    },
+    "Envuélvela en un atajo: abre **Atajos**, toca **+**, busca \"Salida inmediata\" y guárdalo. Vuelve al paso 5 y ya saldrá." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrap it in a shortcut: open **Shortcuts**, tap **+**, search for \"Immediate Exit\" and save it. Go back to step 5 and it will trigger."
+          }
+        }
+      }
+    },
+    "Errores" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errors"
+          }
+        }
+      }
+    },
+    "Escalada" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escalated"
+          }
+        }
+      }
+    },
+    "Escribiendo…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Typing…"
+          }
+        }
+      }
+    },
+    "FaceTime" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FaceTime"
+          }
+        }
+      }
+    },
+    "Finalizar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finish"
+          }
+        }
+      }
+    },
+    "Funciona en las salidas con \"vibrar antes de sonar\" activado. Sin ese aviso la llamada entra directa y no hay margen." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Works on outputs with \"vibrate before ringing\" enabled. Without that warning the call comes in directly and there is no margin."
+          }
+        }
+      }
+    },
+    "Generado con IA" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Generated"
+          }
+        }
+      }
+    },
+    "General" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General"
+          }
+        }
+      }
+    },
+    "Generando…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generating…"
+          }
+        }
+      }
+    },
+    "Generar audio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generate audio"
+          }
+        }
+      }
+    },
+    "Generar con IA" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generate with AI"
+          }
+        }
+      }
+    },
+    "Gestionar suscripción" : {
+
+    },
+    "Grabado" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recorded"
+          }
+        }
+      }
+    },
+    "Grabado a mano" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand-recorded"
+          }
+        }
+      }
+    },
+    "Grabando… %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recording… %@"
+          }
+        }
+      }
+    },
+    "Grabar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Record"
+          }
+        }
+      }
+    },
+    "Guardar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "Guardar y preparar salida" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save and prepare output"
+          }
+        }
+      }
+    },
+    "Hay un problema con el pago. Revisa tu método de pago o perderás el acceso." : {
+
+    },
+    "Historial" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "History"
+          }
+        }
+      }
+    },
+    "Idioma" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        }
+      }
+    },
+    "Idioma de la llamada" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call language"
+          }
+        }
+      }
+    },
+    "Idioma elegido" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chosen language"
+          }
+        }
+      }
+    },
+    "Importar de Contactos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import from Contacts"
+          }
+        }
+      }
+    },
+    "La contestas tú" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You answer it"
+          }
+        }
+      }
+    },
+    "La fila enseña lo elegido sin abrir nada; el sheet lo trae marcado." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The row shows the selection without opening anything; the sheet brings it pre-selected."
+          }
+        }
+      }
+    },
+    "La primera que creaste" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The first one you created"
+          }
+        }
+      }
+    },
+    "Las del catálogo no se pueden borrar. Las tuyas sí." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Catalog ones cannot be deleted. Yours can."
+          }
+        }
+      }
+    },
+    "Las llamadas programadas y los gestos sin tocar la pantalla dejan de funcionar. Disparar una llamada a mano sigue siendo gratis, como siempre." : {
+
+    },
+    "Listo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "Llama con tu salida por defecto para salir del apuro." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call with your default exit to get out of trouble."
+          }
+        }
+      }
+    },
+    "Llamará **%@**, tu salida predeterminada." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "**%@** will call, your default output."
+          }
+        }
+      }
+    },
+    "Más" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More"
+          }
+        }
+      }
+    },
+    "Más tarde" : {
+
+    },
+    "Mensual" : {
+
+    },
+    "Minutos" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minutes"
+          }
+        }
+      }
+    },
+    "Nombre del contacto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contact name"
+          }
+        }
+      }
+    },
+    "Nombre, número, foto y color" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name, number, photo and color"
+          }
+        }
+      }
+    },
+    "Nueva opción" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New option"
+          }
+        }
+      }
+    },
+    "Nueva salida" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New exit"
+          }
+        }
+      }
+    },
+    "Número (opcional, solo visual)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Number (optional, visual only)"
+          }
+        }
+      }
+    },
+    "Palabra de auxilio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safe word"
+          }
+        }
+      }
+    },
+    "Paso %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Step %lld"
+          }
+        }
+      }
+    },
+    "Patrón de insistencia" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insistence pattern"
+          }
+        }
+      }
+    },
+    "Perdida" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Missed"
+          }
+        }
+      }
+    },
+    "Personalizado" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom"
+          }
+        }
+      }
+    },
+    "Playground" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playground"
+          }
+        }
+      }
+    },
+    "Playground de vistas" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Views playground"
+          }
+        }
+      }
+    },
+    "Primary CTA" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primary CTA"
+          }
+        }
+      }
+    },
+    "Probar IA (sin CallKit)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Test AI (no CallKit)"
+          }
+        }
+      }
+    },
+    "Probar la conversación" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Test the conversation"
+          }
+        }
+      }
+    },
+    "Programar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schedule"
+          }
+        }
+      }
+    },
+    "Puedes marcar varias. Se le cuentan todas a la IA para que arme la excusa." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can select several. All of them are counted by the AI to build the excuse."
+          }
+        }
+      }
+    },
+    "Qué debe decir la llamada" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What the call should say"
+          }
+        }
+      }
+    },
+    "Qué salida se dispara" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Which exit is triggered"
+          }
+        }
+      }
+    },
+    "Quitar foto" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove photo"
+          }
+        }
+      }
+    },
+    "Reintentar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
+          }
+        }
+      }
+    },
+    "Relación" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relationship"
+          }
+        }
+      }
+    },
+    "Renovar" : {
+
+    },
+    "Restaurar" : {
+
+    },
+    "Restaurar compras" : {
+
+    },
+    "Salida inmediata" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immediate exit"
+          }
+        }
+      }
+    },
+    "Salidas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exits"
+          }
+        }
+      }
+    },
+    "SALIDAS GUARDADAS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SAVED EXITS"
+          }
+        }
+      }
+    },
+    "Salir" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exit"
+          }
+        }
+      }
+    },
+    "Se configura en Ajustes de iOS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set in iOS Settings"
+          }
+        }
+      }
+    },
+    "Se corta sola (perdida)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuts out on its own (lost)"
+          }
+        }
+      }
+    },
+    "Se guarda en tu lista y la puedes usar en cualquier salida." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It is saved to your list and you can use it in any exit."
+          }
+        }
+      }
+    },
+    "Se hace en los Ajustes de iOS: ninguna app puede tocar este gesto. Elige el triple y no el doble — el móvil detecta los toques por el movimiento, así que con dos basta un golpe seco (dejarlo en la mesa, un roce en el bolsillo) para que salte sin querer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is done in iOS Settings: no app can touch this gesture. Choose triple over double — the phone detects taps by movement, so with two taps a sharp knock is enough (setting it on a table, a brush in your pocket) to trigger it accidentally."
+          }
+        }
+      }
+    },
+    "Se renueva sola hasta que la canceles, desde los ajustes de tu cuenta de Apple." : {
+
+    },
+    "Se usa el idioma del dispositivo. Elige uno concreto abajo si esta salida debe sonar en otro idioma o acento." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The device language is used. Choose a specific one below if this output should sound in a different language or accent."
+          }
+        }
+      }
+    },
+    "Segmented" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segmented"
+          }
+        }
+      }
+    },
+    "Selector de contexto" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Context selector"
+          }
+        }
+      }
+    },
+    "Selector de idioma" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language selector"
+          }
+        }
+      }
+    },
+    "Si \"Salida inmediata\" no aparece" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If"
+          }
+        }
+      }
+    },
+    "Si salta cuando no toca" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If it fires when you don't tap"
+          }
+        }
+      }
+    },
+    "Silenciar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute"
+          }
+        }
+      }
+    },
+    "Simple" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simple"
+          }
+        }
+      }
+    },
+    "Sin audio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No audio"
+          }
+        }
+      }
+    },
+    "Sin elegir" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not chosen"
+          }
+        }
+      }
+    },
+    "Sin historial todavía" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No history yet"
+          }
+        }
+      }
+    },
+    "Sin salidas guardadas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No saved outputs"
+          }
+        }
+      }
+    },
+    "Situación" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Situation"
+          }
+        }
+      }
+    },
+    "Solo aplica a las salidas con conversación en vivo (IA). Si la dices durante la llamada, la IA lo detecta y dispara la alerta sin cambiar el tono ni comentarlo — nadie más lo nota." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only applies to outputs with live conversation (AI). If you say it during the call, the AI detects it and triggers the alert without changing the tone or commenting on it — no one else notices."
+          }
+        }
+      }
+    },
+    "Solo para acordarte de que lo dejaste hecho — esta casilla no activa nada." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Just a reminder that you left it done — this checkbox doesn't activate anything."
+          }
+        }
+      }
+    },
+    "Solo una. Vuelve a tocarla para quitarla." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Just one. Tap it again to remove it."
+          }
+        }
+      }
+    },
+    "Suave" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soft"
+          }
+        }
+      }
+    },
+    "Superficie glass" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glass surface"
+          }
+        }
+      }
+    },
+    "Suscripción" : {
+
+    },
+    "Teclado" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keyboard"
+          }
+        }
+      }
+    },
+    "Tema" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Theme"
+          }
+        }
+      }
+    },
+    "Toca la foto para cambiarla" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap the photo to change it"
+          }
+        }
+      }
+    },
+    "Tocar el dorso" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap the back"
+          }
+        }
+      }
+    },
+    "Todavía no hay ninguna salida creada. Crea una y será la que suene con estos gestos." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No outputs created yet. Create one and it will be the one that plays with these gestures."
+          }
+        }
+      }
+    },
+    "Tres golpecitos en la parte trasera del móvil y entra la llamada. Sin desbloquear y sin que se abra la app." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Three taps on the back of the phone and the call comes in. No unlocking and without opening the app."
+          }
+        }
+      }
+    },
+    "Triple toque en la parte trasera del teléfono" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Triple tap on the back of the phone"
+          }
+        }
+      }
+    },
+    "Tu plan" : {
+
+    },
+    "Tu plan actual" : {
+
+    },
+    "Tu plan ha caducado" : {
+
+    },
+    "TU SALIDA POR DEFECTO" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YOUR DEFAULT OUTPUT"
+          }
+        }
+      }
+    },
+    "Tu salida predeterminada" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your default output"
+          }
+        }
+      }
+    },
+    "Tus salidas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your outputs"
+          }
+        }
+      }
+    },
+    "Tuyas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yours"
+          }
+        }
+      }
+    },
+    "Un momento…" : {
+
+    },
+    "Un toque en el reloj dispara la salida guardada" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A tap on the clock triggers the saved output"
+          }
+        }
+      }
+    },
+    "Una llamada o un patrón de insistencia" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A call or a persistence pattern"
+          }
+        }
+      }
+    },
+    "Una sola llamada entrante, en el momento en que la dispares." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A single incoming call, at the moment you trigger it."
+          }
+        }
+      }
+    },
+    "Urgente" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Urgent"
+          }
+        }
+      }
+    },
+    "Varias llamadas seguidas simulan que alguien te necesita de verdad." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Several calls in a row simulate that someone really needs you."
+          }
+        }
+      }
+    },
+    "Varias llamadas seguidas: una perdida, esperar, y luego la que atiendes. Más creíble cuando necesitas insistencia." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Several calls in a row: one missed, wait, and then the one you answer. More convincing when you need persistence."
+          }
+        }
+      }
+    },
+    "Ver planes" : {
+
+    },
+    "Ver todos los planes" : {
+
+    },
+    "Versión" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version"
+          }
+        }
+      }
+    },
+    "Vibra un par de segundos antes de que entre la llamada, para que no te pille de sorpresa tu propia salida. Y si la disparaste sin querer, repetir el gesto durante ese aviso la cancela." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It vibrates a couple of seconds before the call goes out, so your own outgoing call doesn't catch you off guard. And if you triggered it by mistake, repeating the gesture during that warning cancels it."
+          }
+        }
+      }
+    },
+    "Vibrar antes de sonar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vibrate before ringing"
+          }
+        }
+      }
+    },
+    "Vista previa — Apple Watch" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview — Apple Watch"
+          }
+        }
+      }
+    },
+    "Vistas con datos falsos, para inspeccionarlas sin montar el estado real. Solo en debug." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Views with fake data, to inspect them without setting up the real state. Debug only."
+          }
+        }
+      }
+    },
+    "Voz" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice"
+          }
+        }
+      }
+    },
+    "Voz y conversación" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice and conversation"
+          }
+        }
+      }
+    },
+    "Vuelve a tocar el dorso mientras vibra y la llamada se cancela: notarás dos vibraciones seguidas en vez de una." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap the back of your device again while it vibrates and the call is cancelled: you'll feel two vibrations in a row instead of one."
+          }
+        }
+      }
+    },
+    "Widget de bloqueo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lock Screen Widget"
+          }
+        }
+      }
+    },
+    "Ya lo tengo configurado" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I've already set it up"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

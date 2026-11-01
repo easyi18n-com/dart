@@ -1,0 +1,10 @@
+exit|0
+out|ok    <tmp>/easyi18n.yaml - project proj_abc (Mode A: TMS)
+out|ok    credential - EASYI18N_TOKEN set
+out|ok    <tmp>/AGENTS.md - easyi18n block up to date
+out|ok    <tmp>/EscapeCall/Localizable.xcstrings - 1 entry(ies), 1 locale(s): en
+out|ok    format - format: xcstrings renders every language into one file
+out|ok    mode - Mode A (TMS) - easyi18n translates the catalog this project owns
+out|ok    <tmp>/EscapeCall.xcodeproj - Xcode project
+out|ok    completeness - every target language of version 2026.06.26 carries all 1 entries
+out|All checks passed.

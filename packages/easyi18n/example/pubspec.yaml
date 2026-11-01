@@ -15,6 +15,10 @@ dependencies:
     path: ../
 
 dev_dependencies:
+  # Flow 14 of docs/flows/v1-flows.md drives this app through
+  # `flutter test test/published_render_test.dart` against a live stack.
+  flutter_test:
+    sdk: flutter
   flutter_lints: ^6.0.0
 
 flutter:

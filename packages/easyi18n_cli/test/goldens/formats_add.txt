@@ -1,0 +1,5 @@
+exit|0
+out|Output formats updated (configuration changed or materialized).
+out|Enabled: strings, arb
+out|The enabled formats apply to every version, including pinned versions. Export collisions are checked when downloading.
+out|Next: easyi18n status (requires the read scope).

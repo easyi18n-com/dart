@@ -1,0 +1,2 @@
+exit|0
+out|{"format":"arb","enabled":["strings","arb"],"created":true,"project_dir":"<tmp>","base_url":"https://api.easyi18n.com","next":"easyi18n status"}

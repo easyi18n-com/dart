@@ -1,0 +1,10 @@
+exit|0
+out|Scanned 1 file(s): 1 extractable tr() string(s).
+out|1 new since last push:
+out|  + "Hello"
+out|1 string(s) need translation · ~<0.1 credit(s) (available 1).
+out|Pushed. Translating in the background (1 job(s)).
+out|Waiting for the AI fill to complete...
+out|  1 string(s) pending...
+out|Fill complete.
+out|Published 2026.07.09.9 (3 key(s)). Live via delivery within one poll interval.

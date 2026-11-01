@@ -1,0 +1,2 @@
+exit|1
+out|{"published":true,"remote_version":"2026.07.04.3","local_version":"2026.07.04.1","state":"out_of_date","behind":2,"catalog":"App/Localizable.xcstrings","pulled_at":"2026-07-04T12:00:00.000Z","languages":[{"code":"en","is_base":true,"fill_mode":"manual"},{"code":"es","is_base":false,"fill_mode":"ai"}],"project_dir":"<project>","base_url":"https://api.easyi18n.com"}

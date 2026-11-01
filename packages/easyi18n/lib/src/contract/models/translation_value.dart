@@ -53,6 +53,12 @@ class TranslationText extends TranslationValue {
   String toString() => 'TranslationText($text)';
 }
 
+/// NOTE: unlike `easyi18n_core`'s twin, this one has no `.normalized`
+/// constructor. Core enforces "a form is present with text or absent" (#492)
+/// at its doors — Firestore, the importers, the `/v1` payloads — and the SDK
+/// has none of those: it only pattern-matches values inside the contract
+/// recipes, and a delivered bundle carries rendered ICU strings, not form
+/// maps. If the SDK ever parses raw values, port the invariant with it.
 class TranslationPlural extends TranslationValue {
   const TranslationPlural(this.forms);
   final Map<String, String> forms;

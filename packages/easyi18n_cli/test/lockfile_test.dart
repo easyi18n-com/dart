@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:easyi18n_cli/src/exceptions.dart';
@@ -67,6 +68,33 @@ void main() {
       () => Lockfile.loadOrEmpty(lockAt(), project: 'p1'),
       throwsA(isA<CliException>()),
     );
+  });
+
+  test('non-string project values use the seed and preserve units', () {
+    final cases = <({String name, Object? value, bool include})>[
+      (name: 'absent', value: null, include: false),
+      (name: 'null', value: null, include: true),
+      (name: 'int', value: 123, include: true),
+      (name: 'bool', value: true, include: true),
+      (name: 'object', value: {'id': 'p1'}, include: true),
+      (name: 'array', value: ['p1'], include: true),
+      (name: 'double', value: 1.5, include: true),
+    ];
+
+    for (final c in cases) {
+      lockAt().writeAsStringSync(jsonEncode({
+        'version': 1,
+        if (c.include) 'project': c.value,
+        'units': [
+          {'source': 'Hello', 'ctx': 'button'},
+        ],
+      }));
+      final lock = Lockfile.loadOrEmpty(lockAt(), project: 'seed');
+
+      expect(lock.project, 'seed', reason: c.name);
+      expect(lock.units.single.source, 'Hello', reason: c.name);
+      expect(lock.units.single.ctx, 'button', reason: c.name);
+    }
   });
 
   group('renamePairs', () {

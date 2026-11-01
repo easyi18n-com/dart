@@ -63,6 +63,29 @@ Manifest _manifest(Map<String, Bundle> bundles) => Manifest(
 String _resolve(Easyi18nController c, String locale) =>
     c.resolve(source: 'Hello', locale: locale);
 
+/// Counts `close()` calls so the two ownership branches can be told apart.
+class _CloseSpyClient extends http.BaseClient {
+  int closes = 0;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async =>
+      http.StreamedResponse(const Stream<List<int>>.empty(), 404);
+
+  @override
+  void close() => closes++;
+}
+
+/// `create` with an in-memory store (the default store goes through
+/// `path_provider`) and a dead origin: no test here lets it reach the network.
+Future<Easyi18nController> _create({http.Client? httpClient}) =>
+    Easyi18nController.create(
+      projectId: 'p',
+      baseUrl: Uri.parse('http://127.0.0.1:1'),
+      supportedLocales: const ['en'],
+      httpClient: httpClient,
+      store: InMemoryBundleStore(),
+    );
+
 void main() {
   test('availableLocales grows from the manifest and unknown locales load '
       'on demand', () async {
@@ -129,5 +152,35 @@ void main() {
     expect(notified, greaterThan(0)); // the swap notified dependents
 
     controller.dispose();
+  });
+
+  test('create() closes the http client it BUILT', () async {
+    // On IO an `http.Client` wraps a connection pool whose 15 s idle timer only
+    // `close()` cancels (#1545), so a controller that outlives its use holds a
+    // socket. `runWithClient` hands the spy to the bare `http.Client()` inside
+    // `create`, which is the only way to observe the client it builds itself.
+    final spy = _CloseSpyClient();
+    final controller = await http.runWithClient(_create, () => spy);
+
+    controller.dispose();
+
+    expect(spy.closes, 1,
+        reason: 'create() left the client it built open: nothing else '
+            'references it, so its idle timer outlives the controller');
+  });
+
+  test('an INJECTED http client outlives the controller create() built',
+      () async {
+    // The other half, and the expensive one to get wrong: closing a client the
+    // caller passed in takes down a pool that caller still uses. Without this
+    // test a fix that closes everything passes just the same.
+    final spy = _CloseSpyClient();
+    final controller = await _create(httpClient: spy);
+
+    controller.dispose();
+
+    expect(spy.closes, 0,
+        reason: 'the controller closed a client it did not build: any caller '
+            'sharing that client loses its connection pool');
   });
 }

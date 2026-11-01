@@ -1,0 +1,11 @@
+exit|1
+out|ok    <tmp>/easyi18n.yaml - project proj_abc (Mode A: TMS)
+out|ok    credential - EASYI18N_TOKEN set
+out|warn  <tmp>/AGENTS.md - no easyi18n block - run 'easyi18n init' so agents without MCP read the loop and the credit rules
+out|info  mode - runtime wiring checks not applicable (Mode A: pubspec dependency, assets floor, entitlements, Easyi18nScope)
+out|info  mode - if this project's dashboard Settings has not been set to Mode A yet, do that too - it picks the right publish defaults
+out|ok    scan - 1 file(s), 0 extractable tr() string(s)
+out|ok    icu - 0 source string(s) lint clean
+out|info  delivery - not applicable (Mode A pulls files, no OTA runtime)
+out|FAIL  completeness - fr: 2 of 5 entry(ies) untranslated in version 2026.06.26
+out|1 problem(s), 1 warning(s). Most local issues are fixed by 'easyi18n init'.

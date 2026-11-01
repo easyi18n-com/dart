@@ -1,0 +1,112 @@
+{
+  "resolverVectorsVersion": 1,
+  "_comment": "Golden parity vectors for the vendored resolver (message_resolver.dart, bundle_stack.dart, locale_match.dart). The SDK re-runs this exact JSON against its own copy (synced by tool/sync_contract.dart); drift on either side fails a test before it can ship a backend email and an app UI that resolve the same source differently. Do NOT regenerate silently — bump resolverVectorsVersion and add vectors.",
+  "localeMatches": [
+    { "name": "exact match wins", "requested": "es", "available": ["en", "es"], "expected": "es" },
+    { "name": "es-MX lands on es", "requested": "es-MX", "available": ["en", "es"], "expected": "es" },
+    { "name": "es_US (underscore) lands on es", "requested": "es_US", "available": ["en", "es"], "expected": "es" },
+    { "name": "ES (uppercase) lands on es", "requested": "ES", "available": ["en", "es"], "expected": "es" },
+    { "name": "es-419 lands on es when only es is published", "requested": "es-419", "available": ["en", "es"], "expected": "es" },
+    { "name": "es-419 exact when es-419 is published", "requested": "es-419", "available": ["en", "es", "es-419"], "expected": "es-419" },
+    { "name": "en-GB lands on en", "requested": "en-GB", "available": ["en", "es"], "expected": "en" },
+    { "name": "zh_Hant-TW lands on zh-hant by language", "requested": "zh_Hant-TW", "available": ["en", "zh-hant"], "expected": "zh-hant" },
+    { "name": "unavailable language falls to base (first available)", "requested": "pt-BR", "available": ["en", "es"], "expected": "en" },
+    { "name": "nothing available returns requested verbatim", "requested": "fr", "available": [], "expected": "fr" }
+  ],
+  "available": ["en", "es"],
+  "bundles": {
+    "en": { "messages": {}, "tokenIndex": {} },
+    "es": {
+      "messages": {
+        "reset_password_subject": "Restablece tu contraseña de easyi18n",
+        "email_hi": "Hola {name}",
+        "open_verb": "Abrir",
+        "open_adjective": "Abierto",
+        "item_count": "{count, plural, one {# artículo} other {# artículos}}"
+      },
+      "tokenIndex": {
+        "ec96fb4b53e151218b88f2906d373f98533cb106ca443b554035fe9522efcf7e": "reset_password_subject",
+        "d4930c209d26b5e8131740a136d67f4a4288b2d142ca9fced5b598f0f0a80e65": "email_hi",
+        "7f2ca3f0f205f05c1a2aa410da78637f6680347d7ddd0690a960acfb399e9d60": "open_verb",
+        "044c8a021c6d211232d12afac8f8108e18012f28bea8b26e02723e93a43d9d59": "open_adjective",
+        "2ec046c4ffaf217740c945095235894c228720964f3cb26635c58a65708313ef": "item_count"
+      }
+    }
+  },
+  "resolutions": [
+    {
+      "name": "reset subject resolves for es",
+      "source": "Reset your easyi18n password", "ctx": "email",
+      "requested": "es", "expectedLocale": "es",
+      "expected": "Restablece tu contraseña de easyi18n"
+    },
+    {
+      "name": "reset subject resolves for es-MX",
+      "source": "Reset your easyi18n password", "ctx": "email",
+      "requested": "es-MX", "expectedLocale": "es",
+      "expected": "Restablece tu contraseña de easyi18n"
+    },
+    {
+      "name": "reset subject resolves for es_US",
+      "source": "Reset your easyi18n password", "ctx": "email",
+      "requested": "es_US", "expectedLocale": "es",
+      "expected": "Restablece tu contraseña de easyi18n"
+    },
+    {
+      "name": "reset subject resolves for ES",
+      "source": "Reset your easyi18n password", "ctx": "email",
+      "requested": "ES", "expectedLocale": "es",
+      "expected": "Restablece tu contraseña de easyi18n"
+    },
+    {
+      "name": "reset subject resolves for es-419",
+      "source": "Reset your easyi18n password", "ctx": "email",
+      "requested": "es-419", "expectedLocale": "es",
+      "expected": "Restablece tu contraseña de easyi18n"
+    },
+    {
+      "name": "placeholder interpolation via matched bundle",
+      "source": "Hi {name}", "ctx": "email", "args": { "name": "Leo" },
+      "requested": "es-MX", "expectedLocale": "es",
+      "expected": "Hola Leo"
+    },
+    {
+      "name": "ctx discriminates: verb",
+      "source": "Open", "ctx": "verb",
+      "requested": "es", "expectedLocale": "es",
+      "expected": "Abrir"
+    },
+    {
+      "name": "ctx discriminates: adjective",
+      "source": "Open", "ctx": "adjective",
+      "requested": "es", "expectedLocale": "es",
+      "expected": "Abierto"
+    },
+    {
+      "name": "plural one renders through locale rules",
+      "source": "{count, plural, one {# item} other {# items}}",
+      "args": { "count": 1 },
+      "requested": "es-MX", "expectedLocale": "es",
+      "expected": "1 artículo"
+    },
+    {
+      "name": "plural other renders through locale rules",
+      "source": "{count, plural, one {# item} other {# items}}",
+      "args": { "count": 3 },
+      "requested": "es-MX", "expectedLocale": "es",
+      "expected": "3 artículos"
+    },
+    {
+      "name": "untranslated source falls back to raw with args interpolated",
+      "source": "Verify {email} now", "ctx": "email", "args": { "email": "a@b.c" },
+      "requested": "es", "expectedLocale": "es",
+      "expected": "Verify a@b.c now"
+    },
+    {
+      "name": "unavailable language resolves via base bundle to raw source",
+      "source": "Reset your easyi18n password", "ctx": "email",
+      "requested": "pt-BR", "expectedLocale": "en",
+      "expected": "Reset your easyi18n password"
+    }
+  ]
+}

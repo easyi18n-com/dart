@@ -16,7 +16,11 @@ const _files = <String, String>{
   'lib/src/i18n/text_hash.dart': 'lib/src/contract/i18n/text_hash.dart',
   'lib/src/i18n/icu_canonical.dart': 'lib/src/contract/i18n/icu_canonical.dart',
   'lib/src/i18n/cldr_plurals.dart': 'lib/src/contract/i18n/cldr_plurals.dart',
+  // `part` of the file above (the generated CLDR table): both or neither.
+  'lib/src/i18n/cldr_plural_data.dart':
+      'lib/src/contract/i18n/cldr_plural_data.dart',
   'test/i18n/contract_vectors.json': 'lib/src/contract/contract_vectors.json',
+  'test/i18n/resolver_vectors.json': 'lib/src/contract/resolver_vectors.json',
 };
 
 const _coreRoot = '../easyi18n_core';

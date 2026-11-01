@@ -80,15 +80,25 @@ void main() {
       expect(messageTokenForValue(value, ctx: ''), base);
       expect(messageTokenForValue(value, ctx: '   '), base);
     });
+  });
 
-    test('canonicalJsonEncode sorts nested keys and minifies', () {
-      expect(
-        canonicalJsonEncode({
-          'b': 1,
-          'a': {'d': 2, 'c': 3},
-        }),
-        '{"a":{"c":3,"d":2},"b":1}',
-      );
+  // `bundle.dart` is hand-maintained here (not synced by sync_contract.dart),
+  // so its encoder needs the goldens as much as the synced files do. The other
+  // new blocks in the JSON (`revisions`, `localeRenders`) have no port in this
+  // runtime — they are gated in core and in the plugin.
+  group('canonical json vectors (golden)', () {
+    final cases =
+        (vectors['canonicalJson'] as List).cast<Map<String, dynamic>>();
+
+    test('the file still has canonical json vectors', () {
+      expect(cases, isNotEmpty);
     });
+
+    for (final v in cases) {
+      test(v['name'] as String, () {
+        expect(canonicalJsonEncode(v['value']), v['canonical'],
+            reason: 'canonicalJsonEncode drift for "${v['name']}"');
+      });
+    }
   });
 }

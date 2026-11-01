@@ -1,4 +1,5 @@
 import '../contract/models/bundle.dart';
+import '../contract/models/manifest.dart';
 import 'bundle_store.dart';
 import 'cdn_client.dart';
 
@@ -82,39 +83,32 @@ class DeliveryService {
 
   Future<RefreshResult> _refresh(List<String> locales) async {
     final state = await store.loadState(channel);
-    // Conditional fetch (cheap 304 when unchanged). If the manifest is
-    // unchanged but a requested locale still has no persisted bundle (e.g. a
-    // prior bundle fetch failed), we have no URL for it - fall back to one
-    // unconditional fetch to recover, instead of forcing a full body on every
-    // startup just because a locale is missing.
-    var fetch = await client.fetchManifest(
+    final stored = _storedManifest(state);
+    // A 304 only confirms the manifest stored beside the etag, so the etag
+    // goes out only with one (a 0.2.0 store holds the etag alone).
+    final fetch = await client.fetchManifest(
       manifestUrl,
-      etag: state.manifestEtag,
+      etag: stored == null ? null : state.manifestEtag,
     );
-    if (fetch is ManifestNotModified) {
-      final missing = locales.any((l) => !state.hashByLocale.containsKey(l));
-      // Unchanged: nothing to download, but the locales we already know the
-      // project publishes are the persisted hash pointers.
-      if (!missing) {
-        return RefreshResult(
-            changed: const {}, locales: state.hashByLocale.keys.toSet());
-      }
-      fetch = await client.fetchManifest(manifestUrl, etag: null);
-    }
-    if (fetch is! ManifestUpdated) {
-      return RefreshResult(
-          changed: const {}, locales: state.hashByLocale.keys.toSet());
-    }
-    final manifest = fetch.manifest;
-    final project = manifest.project;
+    final (manifest, etag) = switch (fetch) {
+      ManifestUpdated(:final manifest, :final etag) => (manifest, etag),
+      ManifestNotModified() => (
+          stored ?? (throw DeliveryException('manifest 304 to no validator')),
+          state.manifestEtag,
+        ),
+    };
+    final updated = fetch is ManifestUpdated;
 
     final changed = <String, Bundle>{};
     final hashes = Map<String, String>.from(state.hashByLocale);
     for (final locale in locales) {
       final entry = manifest.locales[locale];
       if (entry == null) continue;
+      // On a 304 the pointer is enough (it is saved after its bundle), which
+      // keeps an unchanged manifest from reading every bundle off the disk.
       if (state.hashByLocale[locale] == entry.bundleHash &&
-          await store.loadBundle(locale, entry.bundleHash) != null) {
+          (!updated ||
+              await store.loadBundle(locale, entry.bundleHash) != null)) {
         continue; // already have this exact bundle persisted.
       }
       // Resolve the (root-relative) bundle URL against the manifest URL we
@@ -130,16 +124,36 @@ class DeliveryService {
       hashes[locale] = entry.bundleHash;
     }
 
-    await store.saveState(
-      channel,
-      state.copyWith(manifestEtag: fetch.etag, hashByLocale: hashes),
-    );
+    // Built whole, not with copyWith: its `??` would keep an older etag beside
+    // a manifest that came without one.
+    if (updated || changed.isNotEmpty) {
+      await store.saveState(
+        channel,
+        DeliveryState(
+          manifestEtag: etag,
+          hashByLocale: hashes,
+          manifest: manifest.toJson(),
+        ),
+      );
+    }
     // Every locale the manifest lists is offerable, even if we didn't fetch its
     // bundle this pass (only [locales] were requested for download).
     return RefreshResult(
         changed: changed,
         locales: manifest.locales.keys.toSet(),
-        project: project);
+        project: manifest.project);
+  }
+
+  /// The manifest [state] stored beside its etag, or null when there is none
+  /// or this SDK can't read its shape (the next fetch then goes unconditional).
+  Manifest? _storedManifest(DeliveryState state) {
+    final json = state.manifest;
+    if (json == null) return null;
+    try {
+      return Manifest.fromJson(json);
+    } catch (_) {
+      return null;
+    }
   }
 }
 
@@ -156,13 +170,13 @@ class RefreshResult {
   /// Locales whose bundle content changed this refresh (empty = nothing to do).
   final Map<String, Bundle> changed;
 
-  /// Every locale the project currently publishes, from the manifest (or the
-  /// last-known persisted pointers on a 304).
+  /// Every locale the project currently publishes, from the manifest (the
+  /// stored one on a 304).
   final Set<String> locales;
 
   /// The project's opaque doc-id, from the manifest — the delivery ref may be a
   /// `@handle/slug` pair, so this is how the runtime learns the id (to build the
-  /// id-only capture endpoint, F1 B4). Null when the manifest wasn't refetched
-  /// (a 304 or a failed fetch).
+  /// id-only capture endpoint, F1 B4). On a 304 it comes from the stored
+  /// manifest, so a launch that only gets 304s learns it too.
   final String? project;
 }

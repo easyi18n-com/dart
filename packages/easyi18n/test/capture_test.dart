@@ -190,5 +190,54 @@ void main() {
       expect(postedTo, buildCaptureUrl(Uri.parse('https://x'), 'p123'));
       controller.dispose();
     });
+
+    test('a handle/slug controller learns the id on a launch whose manifest '
+        'did not change', () async {
+      final manifest = Manifest(
+          project: 'p123', revision: 'r', locales: const <String, ManifestLocale>{});
+      final store = InMemoryBundleStore();
+      final requests = <String>[];
+      final origin = MockClient((req) async {
+        if (req.url.path.endsWith('/capture')) {
+          requests.add('capture ${req.url.path}');
+          return http.Response('{}', 200);
+        }
+        if (req.headers['If-None-Match'] == '"v1"') {
+          requests.add('manifest 304');
+          return http.Response('', 304);
+        }
+        requests.add('manifest 200');
+        return http.Response(jsonEncode(manifest.toJson()), 200,
+            headers: {'etag': '"v1"'});
+      });
+      Future<void> launch() async {
+        final controller = Easyi18nController(
+          supportedLocales: const ['es'],
+          capture: CaptureReporter(
+              endpoint: null,
+              token: 'eik_dev',
+              client: origin,
+              flushInterval: const Duration(hours: 1)),
+          captureEndpointBuilder: (id) =>
+              buildCaptureUrl(Uri.parse('https://x'), id),
+          delivery: DeliveryService(
+            client: CdnClient(origin),
+            store: store,
+            manifestUrl: Uri.parse('https://x/v1/@acme/dogfood/manifest'),
+          ),
+        );
+        controller.resolve(source: 'Fresh source', locale: 'es');
+        await controller.refresh();
+        await pumpEventQueue();
+        controller.dispose();
+      }
+
+      await launch();
+      requests.clear();
+      await launch();
+
+      expect(requests, isNot(contains('manifest 200')));
+      expect(requests, contains('capture /v1/projects/p123/capture'));
+    });
   });
 }

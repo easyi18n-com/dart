@@ -23,7 +23,7 @@ dependencies:
 
     test('is idempotent for any dependency form', () {
       expect(
-        addRuntimeDependency('dependencies:\n  easyi18n: ^0.1.0\n'),
+        addRuntimeDependency('dependencies:\n  easyi18n: ^0.2.0\n'),
         isNull,
       );
       expect(
@@ -36,6 +36,31 @@ dependencies:
       final out = addRuntimeDependency('name: demo\n')!;
       final doc = loadYaml(out) as Map;
       expect((doc['dependencies'] as Map)['easyi18n'], kRuntimeDependency);
+    });
+
+    test('raises a ^0.1.x from an earlier init, and only that', () {
+      const old = 'dependencies:\n  easyi18n: ^0.1.0\n  http: ^1.0.0\n';
+      expect(staleRuntimeConstraint(old), '^0.1.0');
+      final out = addRuntimeDependency(old)!;
+      expect(out, 'dependencies:\n  easyi18n: $kRuntimeDependency\n  http: ^1.0.0\n');
+      expect(staleRuntimeConstraint(out), isNull);
+      expect(addRuntimeDependency('dependencies:\n  easyi18n: ^0.3.0\n'), isNull);
+    });
+
+    test('raises a quoted or commented ^0.1.x too, keeping the comment', () {
+      expect(
+        addRuntimeDependency('dependencies:\n  easyi18n: "^0.1.0"\n'),
+        'dependencies:\n  easyi18n: $kRuntimeDependency\n',
+      );
+      expect(
+        addRuntimeDependency('dependencies:\n  easyi18n: ^0.1.1 # pinned\n'),
+        'dependencies:\n  easyi18n: $kRuntimeDependency # pinned\n',
+      );
+      // A flow mapping has no line to rewrite: left alone, never a crash.
+      expect(
+        addRuntimeDependency('dependencies: {easyi18n: ^0.1.0}\n'),
+        isNull,
+      );
     });
   });
 
@@ -206,6 +231,263 @@ void main() {
           const IdRef('p1'),
         ),
         throwsA(isA<ScaffoldUnpatchable>()),
+      );
+    });
+  });
+
+  group('addLocalizationsDependency', () {
+    test('inserts the sdk package as two lines', () {
+      final out = addLocalizationsDependency('dependencies:\n  flutter:\n    sdk: flutter\n')!;
+      final deps = (loadYaml(out) as Map)['dependencies'] as Map;
+      expect(deps['flutter_localizations'], {'sdk': 'flutter'});
+      expect(deps.containsKey('flutter'), isTrue);
+    });
+
+    test('is idempotent', () {
+      expect(
+        addLocalizationsDependency(
+            'dependencies:\n  flutter_localizations:\n    sdk: flutter\n'),
+        isNull,
+      );
+    });
+  });
+
+  group('scopeArgs', () {
+    const mark = '// Development value:';
+
+    /// The line right above the argument [name].
+    String above(String args, String name) {
+      final lines = args.split('\n');
+      return lines[lines.indexWhere((l) => l.trimLeft().startsWith(name)) - 1];
+    }
+
+    test('names the backend only when it is not production', () {
+      final prod = scopeArgs(const IdRef('p1'));
+      expect(prod, isNot(contains('baseUrl')));
+      expect(prod, contains('refreshInterval: $kScopeRefreshInterval,'));
+      final local = scopeArgs(const IdRef('p1'), baseUrl: 'http://localhost:8080');
+      expect(local, contains("baseUrl: Uri.parse('http://localhost:8080'),"));
+    });
+
+    test('marks the poll as a development value', () {
+      expect(
+        above(scopeArgs(const IdRef('p1')), 'refreshInterval:'),
+        '    $mark a short publish poll. Raise or remove it to release.',
+      );
+    });
+
+    test('marks a non-production backend as a development value', () {
+      final local = scopeArgs(const IdRef('p1'), baseUrl: 'http://localhost:8080');
+      expect(
+        above(local, 'baseUrl:'),
+        '    $mark the easyi18n.yaml backend. Remove it for production.',
+      );
+      expect(above(local, 'refreshInterval:'), startsWith('    $mark'));
+    });
+
+    test('a production scope carries no backend mark', () {
+      final prod = scopeArgs(const IdRef('p1'));
+      expect(mark.allMatches(prod), hasLength(1));
+      expect(prod, isNot(contains('backend')));
+    });
+
+    test('the marks follow the indent and stay within 80 columns', () {
+      final args = scopeArgs(const IdRef('p1'),
+          baseUrl: 'http://localhost:8080', indent: '      ');
+      final marks = args.split('\n').where((l) => l.contains(mark)).toList();
+      expect(marks, hasLength(2));
+      expect(marks, everyElement(startsWith('      $mark')));
+      expect(marks.map((l) => l.length), everyElement(lessThanOrEqualTo(80)));
+    });
+
+    test('the printed snippet carries both marks', () {
+      final snippet =
+          scopeSnippet(const IdRef('p1'), baseUrl: 'http://localhost:8080');
+      expect(above(snippet, 'baseUrl:'), startsWith('    $mark'));
+      expect(above(snippet, 'refreshInterval:'), startsWith('    $mark'));
+    });
+
+    test('escapes the backend as a Dart literal', () {
+      expect(
+        scopeArgs(const IdRef('p1'), baseUrl: r"http://h/it's$x\y"),
+        contains(r"Uri.parse('http://h/it\'s\$x\\y')"),
+      );
+    });
+  });
+
+  group('wrapRunApp writes the backend and the poll', () {
+    const main = 'void main() => runApp(const MyApp());';
+
+    test('with a non-production backend', () {
+      final out = wrapRunApp(main, const IdRef('p1'), baseUrl: 'http://localhost:8080')!;
+      expect(out, contains("baseUrl: Uri.parse('http://localhost:8080'),"));
+      expect(out, contains('refreshInterval: $kScopeRefreshInterval,'));
+      expect('// Development value:'.allMatches(out), hasLength(2));
+    });
+
+    test('without one', () {
+      final out = wrapRunApp(main, const IdRef('p1'))!;
+      expect(out, isNot(contains('baseUrl')));
+      expect(out, contains('refreshInterval:'));
+      expect('// Development value:'.allMatches(out), hasLength(1));
+    });
+  });
+
+  group('localizeApp', () {
+    const template = '''
+import 'package:flutter/material.dart';
+
+void main() => runApp(const MyApp());
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Demo',
+      home: const Home(),
+    );
+  }
+}
+''';
+    const delegates =
+        'localizationsDelegates: GlobalMaterialLocalizations.delegates,';
+    const locales = 'supportedLocales: Easyi18nScope.localesOf(context),';
+
+    test('inserts both arguments first, with both imports', () {
+      final out = localizeApp(template)!;
+      expect(out, contains('    return MaterialApp(\n      $delegates\n      $locales\n      title: '));
+      expect(out, contains("import 'package:easyi18n/easyi18n.dart';"));
+      expect(out, contains("import 'package:flutter_localizations/flutter_localizations.dart';"));
+      expect(RegExp('^import ', multiLine: true).allMatches(out), hasLength(3));
+    });
+
+    test('drops a const and closes an empty argument list on its own line', () {
+      final out = localizeApp(
+        'Widget build(BuildContext context) => const MaterialApp();\n',
+      )!;
+      expect(out, isNot(contains('const MaterialApp')));
+      expect(out, contains('=> MaterialApp(\n  $delegates\n  $locales\n);'));
+    });
+
+    test('moves inline arguments to their own line and keeps .router', () {
+      final out = localizeApp(
+        'Widget build(BuildContext context) => MaterialApp.router(routerConfig: r);\n',
+      )!;
+      expect(out, contains('MaterialApp.router(\n  $delegates\n  $locales\n  routerConfig: r);'));
+    });
+
+    test('is idempotent, and leaves a hand-wired app alone', () {
+      expect(localizeApp(localizeApp(template)!), isNull);
+      expect(
+        localizeApp('Widget build(BuildContext context) => MaterialApp(supportedLocales: mine);'),
+        isNull,
+      );
+    });
+
+    test('bails without a single site or a BuildContext', () {
+      expect(
+        () => localizeApp('$template\nWidget other(BuildContext context) => MaterialApp();'),
+        throwsA(isA<ScaffoldUnpatchable>()),
+      );
+      // Built inside runApp: no context to read the scope from.
+      expect(
+        () => localizeApp('void main() => runApp(const MaterialApp());'),
+        throwsA(isA<ScaffoldUnpatchable>()),
+      );
+      // The only BuildContext belongs to another declaration.
+      expect(
+        () => localizeApp(
+          'class A {\n  Widget build(BuildContext context) => X();\n}\n'
+          'Widget app() => MaterialApp();\n',
+        ),
+        throwsA(isA<ScaffoldUnpatchable>()),
+      );
+      // Another method of the same class, after a block body and after an
+      // arrow body: `context` is not in scope where MaterialApp is built.
+      expect(
+        () => localizeApp(
+          'class A {\n  Widget build(BuildContext context) {\n'
+          '    return _app();\n  }\n\n'
+          '  Widget _app() => MaterialApp();\n}\n',
+        ),
+        throwsA(isA<ScaffoldUnpatchable>()),
+      );
+      expect(
+        () => localizeApp(
+          'class A {\n  Widget build(BuildContext context) => _app();\n\n'
+          '  Widget _app() => MaterialApp();\n}\n',
+        ),
+        throwsA(isA<ScaffoldUnpatchable>()),
+      );
+    });
+
+    test('reads the body through a comment and a plain string', () {
+      // Brackets inside them do not count: `context` is in scope here.
+      expect(
+        localizeApp(
+          'Widget build(BuildContext context) {\n'
+          '  // see runApp( and {\n'
+          '  /* } */ final t = r\'{\\\' + \'it\\\'s (\' + "\$x [";\n'
+          '  return MaterialApp(title: t);\n}\n',
+        ),
+        contains(locales),
+      );
+      // A raw string has no escapes: its trailing backslash ends nothing.
+      expect(
+        localizeApp(
+          'Widget build(BuildContext context) {\n'
+          "  final t = r'\\' + '(';\n"
+          '  return MaterialApp(title: t);\n}\n',
+        ),
+        contains(locales),
+      );
+    });
+
+    test('bails on a body it cannot lex', () {
+      // An unmatched bracket in a string or comment of `build` would leave
+      // the depth at one, and the helper below has no `context`.
+      for (final line in ["    final s = '{';\n", '    // see runApp(\n']) {
+        expect(
+          () => localizeApp(
+            'class A {\n  Widget build(BuildContext context) {\n'
+            '$line    return _app();\n  }\n\n'
+            '  Widget _app() => MaterialApp();\n}\n',
+          ),
+          throwsA(isA<ScaffoldUnpatchable>()),
+          reason: line,
+        );
+      }
+      // A `${` interpolation, a multi-line string, a site inside a comment.
+      for (final (line, site) in [
+        ("  final t = '\${1}';\n", 'MaterialApp()'),
+        ("  final t = '''x''';\n", 'MaterialApp()'),
+        ('  // MaterialApp(\n', 'X()'),
+      ]) {
+        expect(
+          () => localizeApp(
+            'Widget build(BuildContext context) {\n$line'
+            '  return Scaffold(child: $site);\n}\n',
+          ),
+          throwsA(isA<ScaffoldUnpatchable>()),
+          reason: line,
+        );
+      }
+    });
+
+    test('patches a block body and an arrow body that take the context', () {
+      expect(
+        localizeApp(
+          'Widget build(BuildContext context) {\n'
+          '  final t = (1, [2]);\n  return MaterialApp();\n}\n',
+        ),
+        contains(locales),
+      );
+      expect(
+        localizeApp(
+          'Widget build(BuildContext context) =>\n    MaterialApp();\n',
+        ),
+        contains(locales),
       );
     });
   });

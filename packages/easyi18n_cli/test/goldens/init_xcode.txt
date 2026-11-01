@@ -1,0 +1,7 @@
+exit|0
+out|  detected  <tmp>/EscapeCall/Localizable.xcstrings - translation catalog
+out|  created  <tmp>/easyi18n.yaml - project proj_abc
+out|  ok  <tmp>/EscapeCall/Localizable.xcstrings - catalog to sync
+out|  patched  <tmp>/.gitignore - ignored .easyi18n/
+out|  created  <tmp>/AGENTS.md - easyi18n block
+out|Done. Set EASYI18N_TOKEN, then run 'easyi18n sync'.

@@ -53,6 +53,43 @@ void main() {
       expect((await store.loadState('staging')).manifestEtag, isNull);
     });
 
+    test('round-trips the manifest stored beside its etag', () async {
+      const manifest = {
+        'project': 'p',
+        'revision': 'r',
+        'locales': {
+          'es': {'version': 'r', 'bundleHash': 'h-es', 'url': '/es.json'},
+        },
+      };
+      await FileBundleStore(dir).saveState(
+          'production',
+          const DeliveryState(
+              manifestEtag: '"v3"',
+              hashByLocale: {'es': 'h-es'},
+              manifest: manifest));
+
+      final loaded = await FileBundleStore(dir).loadState('production');
+      expect(loaded.manifestEtag, '"v3"');
+      expect(loaded.manifest, manifest);
+    });
+
+    test('copyWith replaces the manifest or keeps it', () {
+      const old = DeliveryState(manifest: {'revision': 'a'});
+      expect(old.copyWith(manifest: {'revision': 'b'}).manifest,
+          {'revision': 'b'});
+      expect(old.copyWith(manifestEtag: '"v2"').manifest, {'revision': 'a'});
+    });
+
+    test('reads the state file 0.2.0 wrote, which has no manifest', () async {
+      await File('${dir.path}/state-production.json').writeAsString(
+          '{"manifestEtag":"\\"4455\\"","hashByLocale":{"en":"8d3a","es":"0e71"}}');
+
+      final loaded = await FileBundleStore(dir).loadState('production');
+      expect(loaded.manifestEtag, '"4455"');
+      expect(loaded.hashByLocale, {'en': '8d3a', 'es': '0e71'});
+      expect(loaded.manifest, isNull);
+    });
+
     test('survives a fresh store instance over the same dir (persistence)',
         () async {
       final bundle = sample('fr');

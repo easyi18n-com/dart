@@ -14,9 +14,20 @@ const String kProjectId = String.fromEnvironment(
 );
 const bool kUseHandleRef = kWorkspace != '' && kProject != '';
 
-/// `--dart-define=USE_EMULATOR=true` points the SDK at the local backend
-/// delivery origin (`tool/backend-up.sh`); otherwise it uses the default origin.
+/// The delivery origin. `--dart-define=USE_EMULATOR=true` points the SDK at the
+/// singleton local stack on `:8080` (`tool/backend-up.sh`);
+/// `--dart-define=EASYI18N_BASE_URL=http://127.0.0.1:<port>` names an origin
+/// explicitly and wins over it. The explicit form is what flow 14 of
+/// `docs/flows/v1-flows.md` uses: `tool/flows/stack-ephemeral.sh` binds a FREE
+/// port, so `localhost:8080` is not an address a run can assume. Neither set
+/// leaves the SDK on its default (production) origin.
 const bool kUseEmulator = bool.fromEnvironment('USE_EMULATOR');
+const String kBaseUrlOverride = String.fromEnvironment('EASYI18N_BASE_URL');
+
+Uri? get _deliveryBaseUrl {
+  if (kBaseUrlOverride.isNotEmpty) return Uri.parse(kBaseUrlOverride);
+  return kUseEmulator ? Uri.parse('http://localhost:8080') : null;
+}
 
 /// A `capture`-scope dev token enables auto-capture in debug:
 /// `--dart-define=EASYI18N_CAPTURE_TOKEN=eik_…`. Never ship it in release.
@@ -45,7 +56,7 @@ class _MyAppState extends State<MyApp> {
       workspace: kUseHandleRef ? kWorkspace : null,
       slug: kUseHandleRef ? kProject : null,
       projectId: kUseHandleRef ? null : kProjectId,
-      baseUrl: kUseEmulator ? Uri.parse('http://localhost:8080') : null,
+      baseUrl: _deliveryBaseUrl,
       supportedLocales: const ['en', 'es'],
       captureToken: kCaptureToken.isEmpty ? null : kCaptureToken,
       // Poll for freshly-published versions while running, so a publish hot-swaps

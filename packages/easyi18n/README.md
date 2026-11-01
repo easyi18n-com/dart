@@ -1,5 +1,7 @@
 # easyi18n
 
+[![pub package](https://img.shields.io/pub/v/easyi18n.svg)](https://pub.dev/packages/easyi18n)
+
 Runtime SDK for [easyi18n](https://easyi18n.com). Translate UI strings with
 **source-as-key** `tr()`, ship an **offline floor**, and get **automatic
 hot-updates** from the delivery manifest: no code generation, no rebuild to
@@ -11,29 +13,37 @@ context.tr('Welcome {name}', args: {'name': user.name})
 
 ## Install
 
-```yaml
-dependencies:
-  easyi18n: ^0.1.0
+```sh
+dart pub add easyi18n
 ```
 
 ## Quickstart
 
 Wrap your `MaterialApp` with `Easyi18nScope`. The only required argument is your
-project id:
+project id. `MaterialApp` needs delegates for the locales you publish and a
+`supportedLocales` list that follows them; `Easyi18nScope.localesOf` reads that
+list from the scope (declared locales plus what the delivery manifest
+advertises), so a language published later reaches the app without a code
+change (`easyi18n init` writes exactly this):
 
 ```dart
 import 'package:easyi18n/easyi18n.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 Easyi18nScope(
   projectId: 'your-project-id',
-  supportedLocales: const ['en', 'es'],
-  child: MaterialApp(
-    locale: locale,
-    supportedLocales: const [Locale('en'), Locale('es')],
-    home: const HomePage(),
+  child: Builder(
+    builder: (context) => MaterialApp(
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      supportedLocales: Easyi18nScope.localesOf(context),
+      home: const HomePage(),
+    ),
   ),
 );
 ```
+
+The app then follows the device language. Pass `locale:` to `MaterialApp`
+only if your app has its own language switch.
 
 Then translate anywhere with the source string as the key:
 
@@ -46,6 +56,10 @@ Text(context.tr(
   args: {'count': n},
 ))
 ```
+
+That includes the widget that builds `MaterialApp`, such as a title passed to
+`home:`: above the app's `Localizations`, `context.tr` follows the locale the
+app runs in.
 
 The source string IS the key; there is no separate key catalog to maintain.
 Add a `ctx:` to disambiguate two identical strings with different meanings

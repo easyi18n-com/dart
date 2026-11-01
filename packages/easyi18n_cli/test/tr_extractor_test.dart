@@ -97,9 +97,10 @@ void f(BuildContext context, dynamic table, List items) {
     expect(result.dynamics, isEmpty);
   });
 
-  test('skips generated files', () {
+  test('skips generated and non-Dart files', () {
     write('lib/x.g.dart', "void f(c) => c.tr('Generated');\n");
     write('lib/x.freezed.dart', "void f(c) => c.tr('Frozen');\n");
+    write('lib/x.txt', "void f(c) => c.tr('Text');\n");
     write('lib/x.dart', "void f(c) => c.tr('Real');\n");
     final result = TrExtractor().extractFromDirectory(tmp);
     expect(result.units.map((u) => u.source), ['Real']);
@@ -140,10 +141,104 @@ Widget build() => Easyi18nScope(projectId: 'p', child: const MyApp());
     expect(result.scopeFile, 'lib/app.dart');
   });
 
+  test('reads whether the scope names baseUrl and the app its locales', () {
+    write('lib/main.dart', '''
+void main() => runApp(Easyi18nScope(projectId: 'p', child: const MyApp()));
+Widget build(BuildContext context) => MaterialApp(home: const X());
+''');
+    var result = TrExtractor().extractFromDirectory(tmp);
+    expect(result.scopeNamesBaseUrl, isFalse);
+    expect(result.appFile, 'lib/main.dart');
+    expect(result.appLocalized, isFalse);
+
+    write('lib/main.dart', '''
+void main() => runApp(Easyi18nScope(
+  projectId: 'p', baseUrl: kBase, child: const MyApp()));
+Widget build(BuildContext context) => const MaterialApp.router(
+  localizationsDelegates: kDelegates,
+  supportedLocales: kLocales,
+  routerConfig: router);
+''');
+    result = TrExtractor().extractFromDirectory(tmp);
+    expect(result.scopeNamesBaseUrl, isTrue);
+    expect(result.appLocalized, isTrue);
+  });
+
+  test('one locale argument is not localized, and no app is no app', () {
+    write('lib/main.dart', '''
+Widget build(BuildContext context) => MaterialApp(supportedLocales: kLocales);
+''');
+    expect(TrExtractor().extractFromDirectory(tmp).appLocalized, isFalse);
+    write('lib/main.dart', 'Widget build() => CupertinoApp();\n');
+    expect(TrExtractor().extractFromDirectory(tmp).appFile, isNull);
+  });
+
+  test('a plain MaterialApp.router counts, and the first app in a file wins',
+      () {
+    write('lib/main.dart', '''
+Widget build(BuildContext context) => MaterialApp.router(
+  localizationsDelegates: d, supportedLocales: l, routerConfig: r);
+Widget preview(BuildContext context) => MaterialApp(home: const X());
+''');
+    final result = TrExtractor().extractFromDirectory(tmp);
+    expect(result.appFile, 'lib/main.dart');
+    expect(result.appLocalized, isTrue);
+  });
+
+  test('reads the wiring through an import prefix', () {
+    write('lib/main.dart', '''
+import 'package:easyi18n/easyi18n.dart' as ei;
+import 'package:flutter/material.dart' as m;
+void main() => runApp(const ei.Easyi18nScope(projectId: 'p', child: X()));
+Widget build(m.BuildContext context) => const m.MaterialApp(home: X());
+''');
+    var result = TrExtractor().extractFromDirectory(tmp);
+    expect(result.scopeFile, 'lib/main.dart');
+    expect(result.appFile, 'lib/main.dart');
+
+    write('lib/main.dart', '''
+import 'package:easyi18n/easyi18n.dart' as ei;
+import 'package:flutter/material.dart' as m;
+void main() => runApp(ei.Easyi18nScope(projectId: 'p', child: X()));
+Widget build(m.BuildContext context) => m.MaterialApp.router(routerConfig: r);
+''');
+    result = TrExtractor().extractFromDirectory(tmp);
+    expect(result.scopeFile, 'lib/main.dart');
+    expect(result.appFile, 'lib/main.dart');
+    expect(result.appLocalized, isFalse);
+  });
+
   test('detects a const/new Easyi18nScope construction', () {
     write('lib/main.dart', '''
 Widget build() => const Easyi18nScope(projectId: 'p', child: MyApp());
 ''');
     expect(TrExtractor().extractFromDirectory(tmp).scopeFile, 'lib/main.dart');
+  });
+
+  test("extraction follows path order, not the filesystem's", () {
+    // Written in an order that APFS lists as `z c b q m a` (#1465), so a walk
+    // that trusts `listSync` names z.dart first in all four outputs.
+    for (final n in ['b', 'a', 'z', 'm', 'c', 'q']) {
+      write('lib/$n.dart', '''
+void f(c, v) {
+  c.tr(v);
+  c.tr('Dup');
+  Easyi18nScope();
+  MaterialApp();
+}
+''');
+    }
+    final result = TrExtractor().extractFromDirectory(tmp);
+    expect(result.dynamics.map((d) => d.file).toList(), [
+      'lib/a.dart',
+      'lib/b.dart',
+      'lib/c.dart',
+      'lib/m.dart',
+      'lib/q.dart',
+      'lib/z.dart',
+    ]);
+    expect(result.scopeFile, 'lib/a.dart');
+    expect(result.appFile, 'lib/a.dart');
+    expect(result.units.single.file, 'lib/a.dart');
   });
 }

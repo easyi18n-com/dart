@@ -1,0 +1,2 @@
+exit|0
+out|{"preview":{"scan":{"files_scanned":1,"total":1,"added":1,"orphans":0,"dynamics_count":0,"dynamics":[],"dynamics_truncated":false,"units":[{"source":"Hello","ctx":null,"file":"lib/app.dart","line":1}],"truncated":false,"project_dir":"<project>","base_url":"https://api.easyi18n.com"},"estimate":{"units_needing_translation":1,"estimated_credits":10.0,"available_credits":500.0,"affordable":true,"would_exceed_key_cap":false,"skipped_gated":0,"skipped_disabled":0},"exhausted":[]},"pushed":null,"published":null,"lockfile_written":false,"dry_run":true}

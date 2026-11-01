@@ -2,25 +2,22 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 
-import '../api_client.dart';
+import '../cli_output.dart';
 import '../config.dart';
-import '../exceptions.dart';
 import '../logger.dart';
-import '../resolve.dart';
-import '../security.dart';
-import '../state.dart';
+import '../session.dart';
+import '../status_runner.dart';
 import 'pull_command.dart' show ApiClientFactory;
 
 /// `easyi18n status` compares the last pulled version
 /// (`.easyi18n/state.json`) against the server's current published version, so
 /// a dev can tell at a glance whether the files on disk are up to date.
-class StatusCommand extends Command<int> {
+class StatusCommand extends Command<int> with JsonPresenter {
   StatusCommand({
-    required CliLogger logger,
+    required this.output,
     ApiClientFactory? apiClientFactory,
     Map<String, String>? environment,
-  }) : _logger = logger,
-       _apiClientFactory = apiClientFactory ?? _defaultFactory,
+  }) : _apiClientFactory = apiClientFactory,
        _environment = environment ?? Platform.environment {
     argParser.addOption(
       'token',
@@ -30,8 +27,9 @@ class StatusCommand extends Command<int> {
     );
   }
 
-  final CliLogger _logger;
-  final ApiClientFactory _apiClientFactory;
+  final CliOutput output;
+  CliLogger get _logger => output.logger;
+  final ApiClientFactory? _apiClientFactory;
   final Map<String, String> _environment;
 
   @override
@@ -45,73 +43,57 @@ class StatusCommand extends Command<int> {
   Future<int> run() async {
     final configPath =
         globalResults?['config'] as String? ?? Easyi18nConfig.fileName;
-    final config = Easyi18nConfig.load(File(configPath));
-    final state = CliState.load(CliState.fileFor(configPath));
+    final config = Easyi18nConfig.load(File(configPath), logger: _logger);
 
-    final token =
-        (argResults!['token'] as String?)?.trim() ??
-        _environment['EASYI18N_TOKEN']?.trim();
-    if (token == null || token.isEmpty) {
-      throw CliException(
-        'No credential. Set EASYI18N_TOKEN or pass --token.\n'
-        'Create an API key in your project settings (needs the read scope).',
+    final token = requireToken(
+      token: argResults!['token'] as String?, environment: _environment,
+    );
+    final result = await StatusRunner().run(
+      config: config, configPath: configPath, token: token, logger: _logger,
+      apiClientFactory: _apiClientFactory,
+    );
+    if (output.json) {
+      output.emit(result.toJson());
+      return result.exitCode;
+    }
+    if (!result.published) {
+      _logger.info('remote: (never published)');
+      _logger.info(
+        "The project has no published version yet - run 'easyi18n push "
+        "--publish' or publish from the dashboard.",
       );
+      return result.exitCode;
     }
-
-    warnOnUntrustedTarget(config.baseUrl, _logger);
-
-    final client = _apiClientFactory(baseUrl: config.baseUrl, token: token);
-    final ProjectMeta meta;
-    try {
-      final projectId = await resolveProjectId(config, client, logger: _logger);
-      meta = await client.fetchMeta(projectId: projectId);
-    } finally {
-      client.close();
-    }
-
-    final remote = meta.currentVersionId;
-    _logger.info('remote: $remote');
-
-    final local = state.version;
-    if (local == null) {
+    _logger.info('remote: ${result.remoteVersion}');
+    if (result.localVersion == null) {
       _logger.info('local:  (never pulled)');
       _logger.info("Run 'easyi18n pull' to download the current version.");
-      return 1;
+      return result.exitCode;
     }
-    final pulledAgo = state.pulledAt == null
+    final pulledAgo = result.pulledAt == null
         ? ''
-        : ' (pulled ${_ago(state.pulledAt!)})';
-    _logger.info('local:  $local$pulledAgo');
-
-    final cmp = comparePublishVersions(local, remote);
-    if (cmp >= 0) {
-      _logger.info('Up to date.');
-      return 0;
+        : ' (pulled ${_ago(result.pulledAt!)})';
+    _logger.info('local:  ${result.localVersion}$pulledAgo');
+    final catalog = result.catalog;
+    if (catalog != null) _logger.detail('catalog: $catalog');
+    if (result.catalogs.isNotEmpty) {
+      _logger.detail('catalogs: ${result.catalogs.join(', ')}');
     }
-    _logger.info("Out of date${_behind(local, remote)} - run 'easyi18n pull'.");
-    return 1;
+    if (result.state == 'up_to_date') {
+      _logger.info('Up to date.');
+    } else {
+      final n = result.behind;
+      final behind = n == null ? '' : ' - $n publish${n == 1 ? '' : 'es'} behind';
+      _logger.info("Out of date$behind - run 'easyi18n pull'.");
+    }
+    return result.exitCode;
   }
+}
 
-  /// `" - N publishes behind"` when both versions parse and share the same
-  /// day (the counter difference is exact there); empty otherwise.
-  String _behind(String local, String remote) {
-    final pl = parsePublishVersion(local);
-    final pr = parsePublishVersion(remote);
-    if (pl == null || pr == null || pl.date != pr.date) return '';
-    final behind = pr.n - pl.n;
-    return ' - $behind publish${behind == 1 ? '' : 'es'} behind';
-  }
-
-  String _ago(DateTime t) {
-    final d = DateTime.now().toUtc().difference(t.toUtc());
-    if (d.inMinutes < 1) return 'just now';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-    if (d.inHours < 24) return '${d.inHours}h ago';
-    return '${d.inDays}d ago';
-  }
-
-  static TranslationsApiClient _defaultFactory({
-    required String baseUrl,
-    required String token,
-  }) => TranslationsApiClient(baseUrl: baseUrl, token: token);
+String _ago(DateTime t) {
+  final d = DateTime.now().toUtc().difference(t.toUtc());
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+  if (d.inHours < 24) return '${d.inHours}h ago';
+  return '${d.inDays}d ago';
 }

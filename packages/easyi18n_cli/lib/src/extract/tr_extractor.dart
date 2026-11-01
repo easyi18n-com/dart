@@ -21,13 +21,17 @@ import 'source_unit.dart';
 /// auto-capture). Parsing is syntax-only (no resolution) so it is fast and works
 /// on a tree that doesn't compile.
 class TrExtractor {
-  /// Scans every `.dart` file under [dir] (recursively), skipping generated
-  /// outputs. Returns deduped, sorted units plus the non-extractable calls.
+  /// Scans every `.dart` file under [dir] (recursively, in path order),
+  /// skipping generated outputs. Returns deduped, sorted units plus the
+  /// non-extractable calls in `(file, line)` order.
   ExtractionResult extractFromDirectory(Directory dir, {String? relativeTo}) {
     final base = relativeTo ?? dir.path;
     final units = <String, ExtractedUnit>{};
     final dynamics = <DynamicUnit>[];
     String? scopeFile;
+    var scopeNamesBaseUrl = false;
+    String? appFile;
+    var appLocalized = false;
     var filesScanned = 0;
 
     for (final file in _dartFiles(dir)) {
@@ -56,7 +60,14 @@ class TrExtractor {
         units.putIfAbsent(u.identity, () => u);
       }
       dynamics.addAll(visitor.dynamics);
-      if (visitor.sawScope) scopeFile ??= rel;
+      if (visitor.sawScope && scopeFile == null) {
+        scopeFile = rel;
+        scopeNamesBaseUrl = visitor.scopeNamesBaseUrl;
+      }
+      if (visitor.sawApp && appFile == null) {
+        appFile = rel;
+        appLocalized = visitor.appLocalized;
+      }
     }
 
     final sorted = units.values.toList()
@@ -66,19 +77,26 @@ class TrExtractor {
       dynamics: dynamics,
       filesScanned: filesScanned,
       scopeFile: scopeFile,
+      scopeNamesBaseUrl: scopeNamesBaseUrl,
+      appFile: appFile,
+      appLocalized: appLocalized,
     );
   }
 
-  Iterable<File> _dartFiles(Directory dir) sync* {
-    if (!dir.existsSync()) return;
-    for (final entity in dir.listSync(recursive: true, followLinks: false)) {
-      if (entity is! File || !entity.path.endsWith('.dart')) continue;
-      if (entity.path.endsWith('.g.dart') ||
-          entity.path.endsWith('.freezed.dart')) {
-        continue;
-      }
-      yield entity;
-    }
+  /// The walk is sorted by path: `listSync` hands files over in filesystem
+  /// order (a name hash on APFS and ext4), which would leave `dynamics`,
+  /// `scopeFile`, `appFile` and each unit's first location to the machine
+  /// that ran the scan (#1465).
+  List<File> _dartFiles(Directory dir) {
+    if (!dir.existsSync()) return const [];
+    return [
+      for (final entity in dir.listSync(recursive: true, followLinks: false))
+        if (entity is File &&
+            entity.path.endsWith('.dart') &&
+            !entity.path.endsWith('.g.dart') &&
+            !entity.path.endsWith('.freezed.dart'))
+          entity,
+    ]..sort((a, b) => a.path.compareTo(b.path));
   }
 }
 
@@ -93,25 +111,65 @@ class _TrVisitor extends RecursiveAstVisitor<void> {
   /// Whether this file constructs an `Easyi18nScope(...)` (the SDK wiring
   /// `doctor` verifies). AST-level, so comments/strings don't count.
   var sawScope = false;
+  var scopeNamesBaseUrl = false;
+
+  /// Whether this file builds a `MaterialApp`, and whether that build names
+  /// the two locale arguments `init` writes (the first build wins).
+  var sawApp = false;
+  var appLocalized = false;
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
     if (node.methodName.name == 'tr') _handle(node);
     // Without resolution, a plain `Easyi18nScope(...)` parses as a method
     // invocation; `const`/`new` forms are InstanceCreationExpressions below.
-    if (node.methodName.name == 'Easyi18nScope' && node.target == null) {
-      sawScope = true;
+    // A prefixed import (`ei.Easyi18nScope(`) parses as a target too.
+    final target = node.target;
+    final bare = target == null || target is SimpleIdentifier;
+    if (node.methodName.name == 'Easyi18nScope' && bare) {
+      _scope(node.argumentList);
+    }
+    if ((node.methodName.name == 'MaterialApp' && bare) ||
+        (node.methodName.name == 'router' && _isMaterialApp(target))) {
+      _app(node.argumentList);
     }
     super.visitMethodInvocation(node);
   }
 
+  /// `MaterialApp` as the target of `.router(`, bare or through a prefix.
+  static bool _isMaterialApp(Expression? target) => switch (target) {
+        SimpleIdentifier(:final name) => name == 'MaterialApp',
+        PrefixedIdentifier(:final identifier) =>
+          identifier.name == 'MaterialApp',
+        _ => false,
+      };
+
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {
-    if (node.constructorName.type.name.lexeme == 'Easyi18nScope') {
-      sawScope = true;
-    }
+    // Unresolved, `const MaterialApp.router(` parses as the prefixed type
+    // `MaterialApp.router`, so the class name sits in the import prefix; a
+    // real prefix (`const ei.Easyi18nScope(`) keeps it in the name.
+    final type = node.constructorName.type;
+    final names = {type.name.lexeme, type.importPrefix?.name.lexeme};
+    if (names.contains('Easyi18nScope')) _scope(node.argumentList);
+    if (names.contains('MaterialApp')) _app(node.argumentList);
     super.visitInstanceCreationExpression(node);
   }
+
+  void _scope(ArgumentList args) {
+    sawScope = true;
+    scopeNamesBaseUrl = scopeNamesBaseUrl || _names(args, 'baseUrl');
+  }
+
+  void _app(ArgumentList args) {
+    if (sawApp) return;
+    sawApp = true;
+    appLocalized =
+        _names(args, 'localizationsDelegates') && _names(args, 'supportedLocales');
+  }
+
+  static bool _names(ArgumentList args, String name) => args.arguments
+      .any((a) => a is NamedArgument && a.name.lexeme == name);
 
   void _handle(MethodInvocation node) {
     final line = _lineInfo.getLocation(node.offset).lineNumber;

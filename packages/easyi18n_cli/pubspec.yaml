@@ -2,7 +2,7 @@ name: easyi18n_cli
 description: >-
   Command-line tool for easyi18n. Pulls translated localization files (Mode A,
   native .arb) and pushes your tr() source strings for translation.
-version: 0.5.0
+version: 1.0.0
 repository: https://github.com/liontude/easyi18n-dart
 issue_tracker: https://github.com/liontude/easyi18n-dart/issues
 topics:
@@ -19,14 +19,27 @@ executables:
   easyi18n:
 
 dependencies:
-  analyzer: ^13.3.0
+  # Floor stays at 13.0.0 on purpose: analyzer >=13.1.0 requires meta ^1.18.3,
+  # while the Flutter SDK pins meta 1.18.0 — a higher floor makes this package
+  # unresolvable as a dev_dependency of any Flutter app. The `analyzer floor`
+  # CI job runs the suite against 13.0.0 so a future bump can't silently
+  # reintroduce it.
+  analyzer: ">=13.0.0 <14.0.0"
   args: ^2.6.0
   crypto: ^3.0.6
+  # Pinned to 0.5.x on purpose, not a caret: 0.6.0 changes the channel type
+  # (StreamChannel<Map>) and the initialization hook, so a caret would break
+  # the stdio transport of `easyi18n mcp` silently.
+  dart_mcp: ">=0.5.2 <0.6.0"
   http: ^1.2.2
+  # Flutter 3.44 pins 0.20.2; keep that floor for app dev_dependencies.
+  intl: ^0.20.2
   path: ^1.9.1
   unorm_dart: ^0.3.2
   yaml: ^3.1.3
 
 dev_dependencies:
   lints: ^6.1.0
+  # The in-memory MCP harness talks to the server over a StreamChannel pair.
+  stream_channel: ^2.1.4
   test: ^1.31.1

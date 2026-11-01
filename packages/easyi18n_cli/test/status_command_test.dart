@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 import 'package:easyi18n_cli/src/api_client.dart';
+import 'package:easyi18n_cli/src/cli_output.dart';
 import 'package:easyi18n_cli/src/commands/status_command.dart';
 import 'package:easyi18n_cli/src/logger.dart';
 import 'package:easyi18n_cli/src/state.dart';
@@ -28,7 +29,7 @@ void main() {
     return path;
   }
 
-  CommandRunner<int> runnerWith({required String remoteVersion}) {
+  CommandRunner<int> runnerWith({required String? remoteVersion}) {
     TranslationsApiClient factory({
       required String baseUrl,
       required String token,
@@ -47,7 +48,7 @@ void main() {
       ..argParser.addOption('config', defaultsTo: 'easyi18n.yaml');
     runner.addCommand(
       StatusCommand(
-        logger: logger,
+        output: CliOutput(logger: logger),
         apiClientFactory: factory,
         environment: const {'EASYI18N_TOKEN': 'eik_x'},
       ),
@@ -61,6 +62,33 @@ void main() {
       pulledAt: DateTime.now().toUtc(),
     ).save(CliState.fileFor(configPath));
   }
+
+  test('a catalog project is told where its pull landed', () async {
+    final config = writeConfig();
+    CliState(
+      version: '2026.07.04.2',
+      pulledAt: DateTime.now().toUtc(),
+      format: 'xcstrings',
+      catalog: 'EscapeCall/Localizable.xcstrings',
+    ).save(CliState.fileFor(config));
+
+    await runnerWith(
+      remoteVersion: '2026.07.04.2',
+    ).run(['--config', config, 'status']);
+
+    expect(out.toString(), contains('EscapeCall/Localizable.xcstrings'));
+  });
+
+  test('a directory pull says nothing about a catalog', () async {
+    final config = writeConfig();
+    writeState(config, '2026.07.04.2');
+
+    await runnerWith(
+      remoteVersion: '2026.07.04.2',
+    ).run(['--config', config, 'status']);
+
+    expect(out.toString(), isNot(contains('catalog')));
+  });
 
   test('up to date → exit 0', () async {
     final config = writeConfig();
@@ -111,5 +139,36 @@ void main() {
     ).run(['--config', config, 'status']);
     expect(code, 1);
     expect(out.toString(), contains('(never pulled)'));
+  });
+
+  test('unpublished remote (null version) → never-published hint, exit 1',
+      () async {
+    final config = writeConfig();
+    // Local state present is the dangerous case: without the guard, the
+    // string-compare fallback reads any local version as newer than '' and
+    // prints "Up to date." against a blank remote.
+    writeState(config, '2026.07.04.2');
+    final code = await runnerWith(
+      remoteVersion: null,
+    ).run(['--config', config, 'status']);
+    expect(code, 1);
+    expect(out.toString(), contains('(never published)'));
+    expect(out.toString(), isNot(contains('Up to date.')));
+  });
+
+  test('a catalogs project is told every file its pull landed in (#590)', () async {
+    final config = writeConfig();
+    CliState(
+      version: '2026.07.04.2',
+      pulledAt: DateTime.now().toUtc(),
+      format: 'xcstrings',
+      catalogs: const ['App/Localizable.xcstrings', 'App/AppShortcuts.xcstrings'],
+    ).save(CliState.fileFor(config));
+
+    await runnerWith(remoteVersion: '2026.07.04.2')
+        .run(['--config', config, 'status']);
+
+    expect(out.toString(),
+        contains('catalogs: App/Localizable.xcstrings, App/AppShortcuts.xcstrings'));
   });
 }

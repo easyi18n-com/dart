@@ -1,15 +1,16 @@
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
-import 'package:path/path.dart' as p;
 
 import '../api_client.dart';
+import '../cli_output.dart';
 import '../config.dart';
 import '../exceptions.dart';
 import '../logger.dart';
+import '../output_format.dart';
+import '../pull_runner.dart';
 import '../resolve.dart';
 import '../security.dart';
-import '../state.dart';
 
 /// Builds the API client `pull` talks to. Injected so tests can swap in a
 /// `MockClient`-backed instance.
@@ -26,14 +27,14 @@ typedef ApiClientFactory =
 /// `--watch` keeps running: it polls the project's `meta` (cheap - one small
 /// GET per cycle, no file bodies) and re-pulls whenever `currentVersionId`
 /// changes, so a publish from the dashboard or CI lands on disk by itself.
-class PullCommand extends Command<int> {
+class PullCommand extends Command<int> with JsonPresenter {
   PullCommand({
-    required CliLogger logger,
+    required this.output,
     ApiClientFactory? apiClientFactory,
     Map<String, String>? environment,
     Future<void> Function(Duration)? sleeper,
     int? watchCyclesForTest,
-  }) : _logger = logger,
+  }) : _runner = PullRunner(output.logger),
        _apiClientFactory = apiClientFactory ?? _defaultFactory,
        _environment = environment ?? Platform.environment,
        _sleep = sleeper ?? Future<void>.delayed,
@@ -42,7 +43,7 @@ class PullCommand extends Command<int> {
       ..addOption(
         'token',
         help:
-            'API key (eik_) with the read scope. '
+            'API key (eik_) with read scope; adopting a missing format also needs write. '
             'Defaults to \$EASYI18N_TOKEN.',
       )
       ..addOption(
@@ -51,9 +52,27 @@ class PullCommand extends Command<int> {
       )
       ..addOption('lang', help: 'Only pull one locale (e.g. es).')
       ..addFlag(
+        'require-complete',
+        negatable: false,
+        help:
+            'Fail (exit 1) when any target language of the pulled version is '
+            'missing translations — the CI gate for a Mode A project, whose '
+            'translations live on the server, not in the code. Needs '
+            '`mode: a` in the config, and refuses to judge a version whose '
+            'publish baked the source into untranslated cells, or that does '
+            'not say which it did: the version decides, not the config.',
+      )
+      ..addFlag(
         'dry-run',
         negatable: false,
         help: 'List the files that would be written without writing them.',
+      )
+      ..addFlag(
+        'force',
+        negatable: false,
+        help:
+            'Replace a file that changed since the pull that wrote it. '
+            'Without it such a file stops the pull before anything is written.',
       )
       ..addFlag(
         'watch',
@@ -69,7 +88,9 @@ class PullCommand extends Command<int> {
       );
   }
 
-  final CliLogger _logger;
+  final CliOutput output;
+  CliLogger get _logger => output.logger;
+  final PullRunner _runner;
   final ApiClientFactory _apiClientFactory;
   final Map<String, String> _environment;
   final Future<void> Function(Duration) _sleep;
@@ -92,7 +113,7 @@ class PullCommand extends Command<int> {
     final results = argResults!;
     final configPath =
         globalResults?['config'] as String? ?? Easyi18nConfig.fileName;
-    final config = Easyi18nConfig.load(File(configPath));
+    final config = Easyi18nConfig.load(File(configPath), logger: _logger);
 
     final token =
         (results['token'] as String?)?.trim() ??
@@ -100,16 +121,50 @@ class PullCommand extends Command<int> {
     if (token == null || token.isEmpty) {
       throw CliException(
         'No credential. Set $tokenEnvVar or pass --token.\n'
-        'Create an API key in your project settings (needs the read scope).',
+        'Create an API key in your project settings with read scope. '
+        'Adopting a missing format also requires write scope.',
       );
     }
 
     warnOnUntrustedTarget(config.baseUrl, _logger);
 
     final watch = results['watch'] as bool;
+    if (watch && output.json) {
+      throw CliException('--json cannot be combined with --watch. Run a one-shot pull instead.');
+    }
     final dryRun = results['dry-run'] as bool;
+    final force = results['force'] as bool;
     final version = results['version'] as String?;
-    final lang = results['lang'] as String?;
+    // Read as the route reads `?lang=`: trimmed, and empty is no filter. A
+    // blank value renders every file, and the pull has to prune and gate like
+    // the full one it is; a padded one renders the trimmed locale.
+    final lang = switch ((results['lang'] as String?)?.trim()) {
+      '' => null,
+      final l => l,
+    };
+    final requireComplete = results['require-complete'] as bool;
+    if (watch && requireComplete) {
+      throw CliException(
+          '--require-complete is a one-shot gate; it cannot be combined '
+          'with --watch.');
+    }
+    // Mode A only: a Mode B project publishes under `incompleteMode: source`,
+    // which bakes the SOURCE into every untranslated cell — the server then
+    // counts it as a value and this gate could never fail. Refusing beats a
+    // green that measures nothing (#1052).
+    if (requireComplete && config.mode != 'a') {
+      // The first remedy is the config line, not another command: for a
+      // gen_l10n project the two commands this used to name are the ones
+      // #1052 documents as structurally unusable, and `push`'s own remedy
+      // points back here — a circle with the real fix outside it.
+      throw CliException(
+          '--require-complete on `pull` is the Mode A gate (the project '
+          'publishes untranslated cells as absent), and this config reads '
+          '`mode: ${config.mode}`. If this project keeps its gen_l10n files '
+          'and the dashboard translates them, add `mode: a` to '
+          'easyi18n.yaml. If it really is a runtime-SDK project, gate with '
+          '`push --publish --require-complete` instead.');
+    }
     if (watch && version != null) {
       throw CliException(
         '--watch follows the latest published version; it cannot be '
@@ -119,12 +174,24 @@ class PullCommand extends Command<int> {
     if (watch && dryRun) {
       throw CliException('--watch cannot be combined with --dry-run.');
     }
+    if (config.format == 'xcstrings' && lang != null) {
+      throw CliException(
+        '--lang cannot be combined with format: xcstrings. A String Catalog '
+        'holds every language in one file, and a single-locale render drops '
+        'the base values its keys are addressed by, so it has nothing to '
+        'merge back into. Pull the whole catalog instead.',
+      );
+    }
 
     final client = _apiClientFactory(baseUrl: config.baseUrl, token: token);
+    final recovery = OutputFormatAdoption(config.format);
+    // Set once a file is pruned or written, so a later failure still reports
+    // them.
+    PullOutcome? partial;
     try {
       final projectId = await resolveProjectId(config, client, logger: _logger);
       if (!watch) {
-        await _pullOnce(
+        final pulled = partial = await _runner.pullOnceDetailed(
           client: client,
           config: config,
           projectId: projectId,
@@ -132,7 +199,12 @@ class PullCommand extends Command<int> {
           version: version,
           lang: lang,
           dryRun: dryRun,
+          recovery: recovery,
+          onApplied: (applied) => partial = applied,
+          force: force,
         );
+        if (requireComplete) _runner.gateComplete(pulled, lang: lang);
+        if (output.json) output.emit(pulled.toJson());
         return 0;
       }
       return await _watch(
@@ -142,7 +214,19 @@ class PullCommand extends Command<int> {
         configPath: configPath,
         lang: lang,
         interval: _parseInterval(results['interval'] as String),
+        recovery: recovery,
+        force: force,
       );
+    } on CliException catch (e) {
+      final error = recovery.annotate(e);
+      if (partial == null || !output.json) throw error;
+      output.emitError(error, report: partial!.toJson());
+      return error.exitCode;
+    } on FileSystemException catch (e) {
+      if (partial == null || !output.json) rethrow;
+      final record = fileSystemError(e);
+      output.emitError(record, report: partial!.toJson());
+      return record.exitCode;
     } finally {
       client.close();
     }
@@ -162,6 +246,10 @@ class PullCommand extends Command<int> {
   /// that dies overnight on one hiccup is worse than one that retries next
   /// cycle. Same for the bootstrap pull: a watch started before the FIRST
   /// publish must idle until a version appears, not exit with an error.
+  ///
+  /// A [FatalCliException] is the exception to that: retrying cannot fix it,
+  /// so warning once per cycle forever would leave the watcher alive, silent
+  /// about being useless, and exiting 0.
   Future<int> _watch({
     required TranslationsApiClient client,
     required Easyi18nConfig config,
@@ -169,8 +257,10 @@ class PullCommand extends Command<int> {
     required String configPath,
     required String? lang,
     required Duration interval,
+    required OutputFormatAdoption recovery,
+    required bool force,
   }) async {
-    Future<String> pullLatest() => _pullOnce(
+    Future<String> pullLatest() => _runner.pullOnce(
       client: client,
       config: config,
       projectId: projectId,
@@ -178,13 +268,17 @@ class PullCommand extends Command<int> {
       version: null,
       lang: lang,
       dryRun: false,
+      recovery: recovery,
+      force: force,
     );
 
     var lastVersion = '';
     try {
       lastVersion = await pullLatest();
+    } on FatalCliException {
+      rethrow;
     } on CliException catch (e) {
-      _logger.warn('${e.message} (watching for the first publish)');
+      _logger.warn('${recovery.annotate(e).message} (watching for the first publish)');
     } on FileSystemException catch (e) {
       _logger.warn('${e.message} (retrying next cycle)');
     }
@@ -204,6 +298,8 @@ class PullCommand extends Command<int> {
         }
         _logger.info('New version ${meta.currentVersionId} - pulling.');
         lastVersion = await pullLatest();
+      } on FatalCliException {
+        rethrow;
       } on CliException catch (e) {
         _logger.warn('${e.message} (retrying next cycle)');
       } on FileSystemException catch (e) {
@@ -211,240 +307,6 @@ class PullCommand extends Command<int> {
       }
     }
     return 0;
-  }
-
-  /// One pull: fetch, write atomically, record state. Returns the pulled
-  /// version id.
-  Future<String> _pullOnce({
-    required TranslationsApiClient client,
-    required Easyi18nConfig config,
-    required String projectId,
-    required String configPath,
-    required String? version,
-    required String? lang,
-    required bool dryRun,
-  }) async {
-    final pulled = await client.fetchTranslations(
-      projectId: projectId,
-      format: config.format,
-      version: version,
-      lang: lang,
-    );
-
-    if (pulled.files.isEmpty) {
-      throw CliException(
-        'The backend returned no files for format "${config.format}". '
-        'Is that format configured for the project?',
-      );
-    }
-
-    final outputDir = p.normalize(p.join(p.dirname(configPath), config.output));
-    final fullPull = lang == null;
-
-    _logger.info(
-      '${dryRun ? 'Would pull' : 'Pulled'} ${pulled.files.length} file(s) '
-      'for ${config.describeRef} (version ${pulled.version}) into $outputDir',
-    );
-
-    // Resolve and guard every path up front, so a bad key aborts the pull
-    // before anything is pruned or written.
-    final entries = <({String relPath, String stripped, String target})>[];
-    for (final relPath in pulled.files.keys.toList()..sort()) {
-      final stripped = _stripFormatPrefix(relPath, config.format);
-      // The file keys come from the backend; a traversing or absolute key
-      // (`../`, `/etc/...`) must never write outside the output directory.
-      final target = _resolveWithin(outputDir, stripped);
-      if (target == null) {
-        throw CliException(
-          'Refusing to write "$relPath": resolves outside $outputDir.',
-        );
-      }
-      entries.add((relPath: relPath, stripped: stripped, target: target));
-    }
-    final written = {for (final e in entries) e.stripped};
-
-    final stateFile = CliState.fileFor(configPath);
-    final previous = CliState.load(stateFile);
-    // Recorded paths only mean something under the format + output dir they
-    // were written into — after a switch they must never be pruned.
-    final sameTarget =
-        previous.format == config.format &&
-        previous.output != null &&
-        p.normalize(previous.output!) == p.normalize(config.output);
-    if (fullPull && sameTarget) {
-      _prune(previous.files ?? const [], written, outputDir, dryRun: dryRun);
-    }
-
-    for (final e in entries) {
-      if (dryRun) {
-        _logger.detail(e.stripped);
-        continue;
-      }
-      final file = File(e.target);
-      file.parent.createSync(recursive: true);
-      // Write to a sibling temp file then atomically rename, so a mid-write
-      // failure can't leave a half-written (un-`gen-l10n`-able) .arb in place.
-      final tmp = File('${e.target}.tmp');
-      tmp.writeAsStringSync(pulled.files[e.relPath]!);
-      tmp.renameSync(e.target);
-      _logger.detail(e.stripped);
-    }
-
-    if (!dryRun) {
-      if (fullPull && previous.files == null) {
-        _hintLeftovers(outputDir, written);
-      } else if (fullPull && !sameTarget && previous.files != null) {
-        _hintSwitchedTarget(configPath, previous);
-      }
-      // Record what now sits on disk for `status` and the next pull's prune.
-      // Best-effort: a cache write must never fail a successful pull.
-      final recorded = fullPull || !sameTarget
-          ? written
-          : {...?previous.files, ...written};
-      try {
-        CliState(
-          version: pulled.version,
-          pulledAt: DateTime.now().toUtc(),
-          format: config.format,
-          output: config.output,
-          files: recorded.toList()..sort(),
-        ).save(stateFile);
-      } on FileSystemException {
-        _logger.detail(
-          'Could not write ${CliState.dirName}/${CliState.fileName}.',
-        );
-      }
-      _logger.info("Run 'flutter gen-l10n' to regenerate your localizations.");
-    }
-    return pulled.version;
-  }
-
-  /// Removes what the previous pull wrote (the caller checks it targeted the
-  /// same format + output dir) and this one no longer serves — typically a
-  /// locale renamed to its platform-canonical filename. Runs BEFORE writing:
-  /// on a case-insensitive filesystem (APFS) deleting the old `zh-hant.json`
-  /// after writing `zh-Hant.json` would hit the same directory entry and
-  /// destroy the fresh file.
-  void _prune(
-    List<String> recorded,
-    Set<String> written,
-    String outputDir, {
-    required bool dryRun,
-  }) {
-    var pruned = 0;
-    for (final rel in recorded) {
-      if (written.contains(rel)) continue;
-      // Recorded by us, but never trust a state file to escape the dir.
-      final target = _resolveWithin(outputDir, rel);
-      if (target == null) continue;
-      final file = File(target);
-      // A pull that crashed mid-write strands `<file>.tmp`; sweep it along.
-      final tmp = File('$target.tmp');
-      if (!file.existsSync() && !tmp.existsSync()) continue;
-      pruned++;
-      if (dryRun) {
-        _logger.detail('Would remove stale $rel');
-        continue;
-      }
-      if (tmp.existsSync()) tmp.deleteSync();
-      if (file.existsSync()) file.deleteSync();
-      _logger.detail('Removed stale $rel');
-      _dropEmptiedDirs(file.parent, outputDir);
-    }
-    if (pruned > 0) {
-      _logger.info(
-        '${dryRun ? 'Would remove' : 'Removed'} $pruned stale file(s) '
-        'from the previous pull.',
-      );
-    }
-  }
-
-  /// Deletes the dirs a pruned file leaves behind (`zh-hant.lproj/`), walking
-  /// up to [outputDir]. Finder droppings (`.DS_Store`) don't keep a dir alive.
-  void _dropEmptiedDirs(Directory dir, String outputDir) {
-    while (p.isWithin(outputDir, dir.path)) {
-      final entries = dir.listSync();
-      final droppings = entries
-          .where((e) => p.basename(e.path) == '.DS_Store')
-          .toList();
-      if (droppings.length != entries.length) return;
-      for (final dropping in droppings) {
-        dropping.deleteSync();
-      }
-      dir.deleteSync();
-      dir = dir.parent;
-    }
-  }
-
-  /// Resolves [rel] under [outputDir], or null when it escapes it — the
-  /// single containment rule for both the write and the delete paths.
-  static String? _resolveWithin(String outputDir, String rel) {
-    final target = p.normalize(p.join(outputDir, rel));
-    return p.isWithin(outputDir, target) ? target : null;
-  }
-
-  /// A format or output-dir switch strands the previous pull's outputs (their
-  /// records no longer match this pull's target, so they can never be
-  /// pruned). Surface the ones still on disk instead of leaving them behind
-  /// silently — this is the last pull that still has their record.
-  void _hintSwitchedTarget(String configPath, CliState previous) {
-    final prevOutput = previous.output;
-    if (prevOutput == null) return;
-    final prevDir = p.normalize(p.join(p.dirname(configPath), prevOutput));
-    final stranded = <String>[];
-    for (final rel in previous.files ?? const <String>[]) {
-      final target = _resolveWithin(prevDir, rel);
-      if (target != null && File(target).existsSync()) stranded.add(rel);
-    }
-    if (stranded.isEmpty) return;
-    stranded.sort();
-    _logger.info(
-      'The previous ${previous.format ?? 'unknown'}-format pull left '
-      '${stranded.length} file(s) in $prevDir that this pull no longer '
-      'manages: ${stranded.join(', ')}. Remove them if stale.',
-    );
-  }
-
-  /// First pull that records its file list (older CLIs kept none): surface
-  /// files in the output dir it cannot attribute — e.g. a pre-canonical
-  /// `app_zh-hant.arb` — since without a recorded list nothing can be pruned
-  /// safely. One-shot by construction: after this pull the list exists.
-  void _hintLeftovers(String outputDir, Set<String> written) {
-    final root = Directory(outputDir);
-    if (!root.existsSync()) return;
-    final extensions = written
-        .map(p.extension)
-        .where((e) => e.isNotEmpty)
-        .toSet();
-    // Case-insensitive: on APFS the fresh file can surface under a previous
-    // pull's directory-entry casing.
-    final writtenLower = written.map((w) => w.toLowerCase()).toSet();
-    final leftovers =
-        root
-            .listSync(recursive: true)
-            .whereType<File>()
-            .map((f) => p.split(p.relative(f.path, from: outputDir)).join('/'))
-            .where(
-              (rel) =>
-                  extensions.contains(p.extension(rel)) &&
-                  !writtenLower.contains(rel.toLowerCase()),
-            )
-            .toList()
-          ..sort();
-    if (leftovers.isEmpty) return;
-    _logger.info(
-      'Not written by this pull: ${leftovers.join(', ')}. '
-      'Remove them if stale; from now on pull tracks and cleans its own files.',
-    );
-  }
-
-  /// The backend namespaces files under the format id (`arb/app_en.arb`); strip
-  /// it so files land directly in the output dir (gen-l10n's `arb-dir`).
-  String _stripFormatPrefix(String relPath, String format) {
-    final prefix = '$format/';
-    return relPath.startsWith(prefix)
-        ? relPath.substring(prefix.length)
-        : relPath;
   }
 
   static TranslationsApiClient _defaultFactory({

@@ -1,0 +1,4 @@
+exit|1
+err|warning: 1 tr() call(s) with a non-literal source - these rely on runtime auto-capture, not static extraction:
+out|{"files_scanned":1,"total":2,"added":1,"orphans":1,"dynamics_count":1,"dynamics":[{"file":"lib/app.dart","line":4,"snippet":"c.tr(name)"}],"dynamics_truncated":false,"units":[{"source":"Hello","ctx":null,"file":"lib/app.dart","line":2},{"source":"Goodbye","ctx":null,"file":"lib/app.dart","line":3}],"truncated":false,"project_dir":"<project>","base_url":"https://api.easyi18n.com"}
+err|error: 1 orphan(s) found.

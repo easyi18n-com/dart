@@ -1,0 +1,2 @@
+exit|1
+out|{"error":{"message":"No credential. Set EASYI18N_TOKEN or pass --token.\nCreate an API key in your project settings (needs the publish scope).","code":"cli_error","statusCode":null,"retryable":false}}

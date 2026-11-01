@@ -151,6 +151,14 @@
       "ctx": null,
       "canonical": "{count, plural, =0{zero-lit} =2{two-lit} one{o} other{d} aaa{a-custom} zzz{z-custom}}",
       "token": "10beb58779096f43a01ee78719c695cf3e4cdca3de457edf404fa8e5833a081b"
+    },
+    {
+      "name": "text_exotic_whitespace",
+      "kind": "text",
+      "source": "﻿ Hi there  ",
+      "ctx": null,
+      "canonical": "Hi there",
+      "token": "d957387f995819d57dbc48ef633d5b093b893f4cba750ee818c32a88c01b473e"
     }
   ],
   "bundles": [
@@ -171,6 +179,1714 @@
       "messages": {},
       "tokenIndex": {},
       "bundleHash": "85c7a117af266cead80d372bb39dcc67f64ecfc1c37828b4a40b1e810d03da6b"
+    },
+    {
+      "locale": "es-adversarial",
+      "messages": {
+        "slash": "a/b",
+        "unicode": "café 🎉",
+        "quote": "say \"hi\"",
+        "newline": "l1\nl2",
+        "lsep": "x y"
+      },
+      "tokenIndex": {
+        "1111111111111111111111111111111111111111111111111111111111111111": "slash"
+      },
+      "bundleHash": "b39fe1888fc4ed27bcf024dbfd2fa2ed451402072e7899a4a00dddd0630846aa"
     }
-  ]
+  ],
+  "revisions": [
+    {
+      "name": "markdown_simple",
+      "format": "markdown",
+      "fullText": "# Title\n\nHello world.\n",
+      "revisionId": "cd34999a553ba9074b5660671c2af901c6f9984bf71808edd307baf80a8995c1"
+    },
+    {
+      "name": "html_simple",
+      "format": "html",
+      "fullText": "<h1>Title</h1>\n<p>Hello world.</p>\n",
+      "revisionId": "12b04c8f44be8f306d0ef2dfa22bc096058f12632824535fda67a8e556e298ac"
+    },
+    {
+      "name": "plaintext_simple",
+      "format": "plaintext",
+      "fullText": "Hello world.\n",
+      "revisionId": "1799b81effbcf65ab25571909cfdcfa2c86624485ebf0167c28f4206af534adf"
+    },
+    {
+      "name": "format_is_part_of_the_address",
+      "format": "plaintext",
+      "fullText": "# Title\n\nHello world.\n",
+      "note": "Same bytes as markdown_simple under another format: the ids differ.",
+      "revisionId": "972c33757f9700ac685bc98f42a61a859add71e79ef8d78057e256c269e11f2c"
+    },
+    {
+      "name": "empty_text",
+      "format": "markdown",
+      "fullText": "",
+      "revisionId": "200c6cf31eb5f115e81f5b82a9e2cbc57b0379f26f13f98889baff338b0e9729"
+    },
+    {
+      "name": "crlf_verbatim",
+      "format": "markdown",
+      "fullText": "line1\r\nline2\r\n",
+      "note": "CRLF is hashed verbatim — no line-ending folding (unlike messageToken).",
+      "revisionId": "c5366a5d1e65f758c9c0340a9e794fc30542e1e57927a958051c96a8c6d86f67"
+    },
+    {
+      "name": "lf_counterpart",
+      "format": "markdown",
+      "fullText": "line1\nline2\n",
+      "note": "Same document as crlf_verbatim with LF endings: the ids MUST differ.",
+      "revisionId": "08e0160ef4c610e3b82b247ebd4d7f66bd3490c341849c97063675a4b635756c"
+    },
+    {
+      "name": "untrimmed_whitespace",
+      "format": "markdown",
+      "fullText": "  padded  \n\n",
+      "note": "Leading/trailing whitespace is part of the text — no trimming.",
+      "revisionId": "03bd479b1c42ef10a05af1a339888cb19d6548c031a8f1cce50af845dcc0b660"
+    },
+    {
+      "name": "leading_newline",
+      "format": "markdown",
+      "fullText": "\nHello\n",
+      "note": "Guards the \"<format>\\n\" + text concatenation seam.",
+      "revisionId": "885ff66a74ba8c96e2d20afc245c23d60f34b7ed71819b8ea5ebe4b348a80cd4"
+    },
+    {
+      "name": "unicode_emoji",
+      "format": "markdown",
+      "fullText": "Café 🎉 — naïve\n",
+      "note": "Hashed as UTF-8 bytes, astral plane included.",
+      "revisionId": "11b63b23b9efe8b8d07b8d884fd0f9a42825a6b1d23c3a67894645a9d4480449"
+    },
+    {
+      "name": "nfc_precomposed",
+      "format": "markdown",
+      "fullText": "café\n",
+      "note": "U+00E9. No Unicode normalization: pairs with nfd_decomposed.",
+      "revisionId": "924c1237afbbad5223d11fb3205f63b91a57f006f0bfc8ce8d67656f075097f7"
+    },
+    {
+      "name": "nfd_decomposed",
+      "format": "markdown",
+      "fullText": "café\n",
+      "note": "e + U+0301, same grapheme as nfc_precomposed: the ids MUST differ.",
+      "revisionId": "d6f3380db06a5a2bc70daab472d3067b88bad10a0032497aa11469f2c6773e94"
+    }
+  ],
+  "canonicalJson": [
+    {
+      "name": "nested_sort",
+      "value": {
+        "b": 1,
+        "a": {
+          "d": 2,
+          "c": 3
+        }
+      },
+      "canonical": "{\"a\":{\"c\":3,\"d\":2},\"b\":1}"
+    },
+    {
+      "name": "array_order_preserved",
+      "value": {
+        "z": [
+          3,
+          1,
+          2
+        ],
+        "a": [
+          {
+            "b": 1,
+            "a": 2
+          }
+        ]
+      },
+      "note": "Arrays keep their order; objects inside them are still sorted.",
+      "canonical": "{\"a\":[{\"a\":2,\"b\":1}],\"z\":[3,1,2]}"
+    },
+    {
+      "name": "ascii_key_order",
+      "value": {
+        "9": "n",
+        "10": "n",
+        "A": "u",
+        "_x": "u",
+        "-y": "d",
+        "a": "l",
+        "b": "l"
+      },
+      "note": "Keys sort by UTF-16 code unit and never numerically: \"10\" comes before \"9\". For ASCII keys that is also byte order — see astral_vs_bmp_key_order for where the two part ways.",
+      "canonical": "{\"-y\":\"d\",\"10\":\"n\",\"9\":\"n\",\"A\":\"u\",\"_x\":\"u\",\"a\":\"l\",\"b\":\"l\"}"
+    },
+    {
+      "name": "astral_vs_bmp_key_order",
+      "value": {
+        "z": "ascii",
+        "😀": "astral",
+        "Ａ": "bmp-high"
+      },
+      "note": "UTF-16 code-unit order is NOT code-point order: an astral key starts with a surrogate (0xD83D) that sorts BEFORE U+E000..U+FFFF, while its code point sorts after. A port using byte/code-point order (PHP ksort SORT_STRING, Python sorted) gets these two backwards. Reachable input: report keys come from a user-defined reportSchema.",
+      "canonical": "{\"z\":\"ascii\",\"😀\":\"astral\",\"Ａ\":\"bmp-high\"}"
+    },
+    {
+      "name": "no_unicode_escaping",
+      "value": {
+        "k": "café 🎉"
+      },
+      "note": "Non-ASCII stays raw (PHP needs JSON_UNESCAPED_UNICODE).",
+      "canonical": "{\"k\":\"café 🎉\"}"
+    },
+    {
+      "name": "no_slash_escaping",
+      "value": {
+        "url": "a/b"
+      },
+      "note": "Solidus stays raw (PHP needs JSON_UNESCAPED_SLASHES).",
+      "canonical": "{\"url\":\"a/b\"}"
+    },
+    {
+      "name": "control_char_escapes",
+      "value": {
+        "s": "tab\there\nnew\"q\"\\back\u0000end"
+      },
+      "note": "\\t \\n \\\" \\\\ use the short escapes; NUL uses \\u0000.",
+      "canonical": "{\"s\":\"tab\\there\\nnew\\\"q\\\"\\\\back\\u0000end\"}"
+    },
+    {
+      "name": "line_separators_raw",
+      "value": {
+        "s": "x y z"
+      },
+      "note": "U+2028/U+2029 stay raw (PHP escapes them unless JSON_UNESCAPED_LINE_TERMINATORS).",
+      "canonical": "{\"s\":\"x y z\"}"
+    },
+    {
+      "name": "scalars_and_empties",
+      "value": {
+        "i": 42,
+        "neg": -7,
+        "t": true,
+        "f": false,
+        "n": null,
+        "emptyObj": {},
+        "emptyArr": [],
+        "s": ""
+      },
+      "note": "Floats are deliberately absent: no contract payload carries one.",
+      "canonical": "{\"emptyArr\":[],\"emptyObj\":{},\"f\":false,\"i\":42,\"n\":null,\"neg\":-7,\"s\":\"\",\"t\":true}"
+    },
+    {
+      "name": "top_level_array",
+      "value": [
+        {
+          "b": 1,
+          "a": 2
+        },
+        "x"
+      ],
+      "note": "The encoder accepts any JSON value, not only objects.",
+      "canonical": "[{\"a\":2,\"b\":1},\"x\"]"
+    },
+    {
+      "name": "bundle_hash_preimage",
+      "value": {
+        "schemaVersion": 1,
+        "locale": "es-adversarial",
+        "messages": {
+          "slash": "a/b",
+          "unicode": "café 🎉",
+          "quote": "say \"hi\"",
+          "newline": "l1\nl2",
+          "lsep": "x y"
+        },
+        "tokenIndex": {
+          "1111111111111111111111111111111111111111111111111111111111111111": "slash"
+        }
+      },
+      "note": "The exact string the es-adversarial bundleHash is the sha256 of.",
+      "canonical": "{\"locale\":\"es-adversarial\",\"messages\":{\"lsep\":\"x y\",\"newline\":\"l1\\nl2\",\"quote\":\"say \\\"hi\\\"\",\"slash\":\"a/b\",\"unicode\":\"café 🎉\"},\"schemaVersion\":1,\"tokenIndex\":{\"1111111111111111111111111111111111111111111111111111111111111111\":\"slash\"}}"
+    }
+  ],
+  "localeRenders": [
+    {
+      "stored": "es-es",
+      "underscore": "es_ES"
+    },
+    {
+      "stored": "pt-br",
+      "underscore": "pt_BR"
+    },
+    {
+      "stored": "en",
+      "underscore": "en"
+    },
+    {
+      "stored": "fil",
+      "underscore": "fil"
+    },
+    {
+      "stored": "es-419",
+      "underscore": "es_419"
+    },
+    {
+      "stored": "zh-hant",
+      "underscore": "zh_Hant"
+    },
+    {
+      "stored": "zh-hant-hk",
+      "underscore": "zh_Hant_HK"
+    },
+    {
+      "stored": "sr-latn-rs",
+      "underscore": "sr_Latn_RS"
+    },
+    {
+      "stored": "es_es",
+      "note": "Underscore input is normalized like the dash form.",
+      "underscore": "es_ES"
+    },
+    {
+      "stored": "ES-es",
+      "note": "Case in the stored code does not matter.",
+      "underscore": "es_ES"
+    },
+    {
+      "stored": "  es-es  ",
+      "note": "Surrounding whitespace is trimmed.",
+      "underscore": "es_ES"
+    },
+    {
+      "stored": "en-foobar123",
+      "note": "Off-grammar legacy code: returned verbatim, never guessed at.",
+      "underscore": "en-foobar123"
+    }
+  ],
+  "pluralForms": {
+    "_comment": "Golden vectors for the plural recipes a gettext-compiling consumer reproduces at DELIVERY time (#486). The WordPress plugin compiles `messages[slug]` to `.l10n.php`, so no ICU renderer runs when a reader loads the page: WordPress picks the form by evaluating the `Plural-Forms` header. That makes two recipes load-bearing — the per-language rule table and the parse of the served ICU — and both fail SILENTLY when wrong (the reader sees the wrong word, or no word, with no error anywhere). `rules` is the table (`gettextRuleFor`), `lookups` the locale resolution (`lookupPluralTable`), `serve` what `renderIcuPlural` puts in a bundle, `parse`/`parseRejects` what `tryParseIcuPlural` recovers from it. Every `serve` message with a non-null value reappears in `parse`, so the two halves are pinned against each other and not just against themselves. Additive: no `messageTokenAlgo` bump — this block describes the RENDERABLE ICU in bundles, which is a different artifact from the canonical form the m1 token hashes. Scope limit, so the block is not read as more than it is: every `serve` vector renders a non-Markdown key. A Markdown key has ` *\\n` rewritten to `  \\n` INSIDE each body before it reaches the plural structure, so its served bodies differ from what an identical non-Markdown key would carry. That rewrite is orthogonal to everything pinned here — it never moves a selector, a brace or a category.",
+    "otherIsMandatory": "A value stored as a plural always reaches `messages[slug]` carrying `other`, and the body is non-empty EXCEPT for a language whose gettext rule has no `other` slot at all (`ru`, `pl`, `uk`, `be`), where it is emitted empty and unreachable for integer counts. Presence is guaranteed by OMISSION, not by synthesis and not by rejection: a plural with no usable `other` has its key left out of the bundle, so the reader falls back to the source (#492). SCOPE, because this is the sentence most likely to be over-read: the gate asks its question of the value as a CONSUMER reads it, not of the way it is stored. A source stored as TEXT is walked as an ICU message and refused on the same grounds (#511) — inline `{count, plural, …}` sources are stored as text by design, since the Flutter SDK hashes them opaquely to keep token parity. Walked, NOT pattern-matched as a plural body: `{n, plural, offset:1 other{…}}` is valid and must publish, a plural EMBEDDED in a longer sentence is still judged, `select`/`selectordinal` count too, and `other{}` with an empty body counts as missing. The gettext `ru`/`pl`/`uk`/`be` exception does NOT apply to an inline text: it exists because a stored value gets its `other` branch synthesized on emit, and a text is served verbatim. Two things the gate still does NOT cover: a version published before it existed keeps whatever it froze, and ICU that is malformed WITHOUT missing an `other` (an unbalanced brace) is left alone rather than risk dropping valid copy over a guess. So treat a missing key as untranslated, and keep guarding an empty or absent branch instead of trusting this paragraph.",
+    "blankFormsAreAbsent": "The rule above is `other`'s case of a general one, and the general one is what a consumer must implement: a plural form is present WITH TEXT, or absent — there is no present-and-empty, for any selector (#510). A form whose body is whitespace-only is dropped on the way out and the served message reads exactly as if its key had never been there; the same goes for a `=N` literal, which is a form like any other. The reason does not depend on the category: `few{  }` renders the empty string, so a reader gets a hole where an absent form would have fallen back to another branch — the `msgstr[2] \"\"` failure of #490 with a different label. The drop is SILENT on purpose, because a blank form and an absent form are the same state and an absent form is not a diagnostic; a format whose own rule then has a hole still reports it in that format's terms (gettext indexes `msgstr[i]` by slot, so the dropped form surfaces as its empty-slot error). Stored data cannot normally carry one — every door normalizes blanks away — so this is what the RENDERER guarantees about a value assembled in memory, which is the only place one survives. The one thing it does not do is invent: dropping the last non-`other` form leaves a one-branch message, not a synthesized filler.",
+    "defaultHeader": "nplurals=2; plural=(n != 1);",
+    "fallbackIsAGuess": "A language with no explicit gettext rule answers with `defaultHeader` and `[one, other]`, flagged `isModelled: false`. The value is declared in one place so consumers cannot each invent a different one; the flag is what makes the guess visible. Two forms rather than one because collapsing to `other` reads as \"this language has no singular\" and drops the field from the editor, the fill prompt and every export. READ THE RIGHT FLAG: the two tables are NOT the same size — the gettext table states 70 locales, the CLDR table 217 — so `isModelled` (gettext, the rule) and `cldrModelled` (CLDR, the category set) disagree for most of the difference, and 28 of those locales have MORE than two CLDR categories. `isModelled` is the guard a gettext compiler must use. Guarding on `cldrModelled` hands the 2-form default to Slovenian (one/two/few/other) and to Hindi (right categories, wrong boundary for zero) — see the `sl` and `hi` rows in `lookups`.",
+    "defaultHeaderLanguagesNote": "The languages it is SAFE to hand `defaultHeader` — derived by comparing headers, not by counting categories. `fr` and `pt` are the counterexample the count would miss: two categories, `[one, other]`, but `plural=(n > 1);` — they put 0 in the singular. European Portuguese IS in this list and `pt` is not, from the same primary subtag. These are TABLE KEYS, exactly as in `rules[].lang`: the entry reads `pt-pt`, lowercase, so a direct membership test on a bundle locale answers `false` for `pt-PT`, `pt_PT` and `pt-Latn-PT` — resolve through the `lookups` recipe first. Outside the modelled table this predicate has no answer, and `isModelled` says so instead of implying otherwise.",
+    "defaultHeaderLanguages": [
+      "bg",
+      "ca",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "et",
+      "eu",
+      "fi",
+      "gl",
+      "he",
+      "hu",
+      "it",
+      "nb",
+      "nl",
+      "nn",
+      "no",
+      "pt-pt",
+      "sv",
+      "tr"
+    ],
+    "rulesNote": "`forms` is in GETTEXT INDEX order — `forms[i]` is the CLDR category that lands in `msgstr[i]`, i.e. the form the header’s `plural=` expression selects with the value `i`. It is NOT canonical CLDR order. Headers are pinned VERBATIM per language on purpose — several share an expression, and a mutation of the shared Slavic one passed an entire suite that asserted with `contains`. `lang` is a TABLE KEY, not a locale to compare against: keys are lowercase and `-` separated, and one of them (`pt-pt`) carries a region. A bundle locale must be resolved through the `lookups` recipe before it is matched — comparing a locale to these strings directly answers `pt-PT` with nothing and `pt_BR` with nothing. WHY `forms` AND `cldrCategories` DIFFER, and why the difference is not always harmless: for `ru`/`uk`/`be`/`pl` (`other`), `cs`/`sk` and `lt` (`many`) the extra CLDR category covers DECIMALS only, so gettext — which indexes integers — loses nothing. For the rest it is NOT decimal-only and a body IS dropped: `he` carries a CLDR dual reachable at the integer n = 2, and `es`/`it`/`ca`/`fr`/`pt`/`pt-pt` carry CLDR `many` reachable at n = 1000000. `renderIcuPlural` emits those branches into the bundle with NO diagnostic (the drop is reported by the PO exporter, not by delivery), so a compiler walking `forms` silently discards a translated body. Do not read `cldrCategories` minus `forms` as \"decimals, safely ignorable\".",
+    "rules": [
+      {
+        "lang": "ar",
+        "header": "nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 ? 4 : 5);",
+        "forms": [
+          "zero",
+          "one",
+          "two",
+          "few",
+          "many",
+          "other"
+        ],
+        "cldrCategories": [
+          "zero",
+          "one",
+          "two",
+          "few",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "be",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "many"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "bg",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "bm",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "bo",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "bs",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "other"
+        ]
+      },
+      {
+        "lang": "ca",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "cs",
+        "header": "nplurals=3; plural=((n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "da",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "de",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "dz",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "el",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "en",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "es",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "et",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "eu",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "fi",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "fr",
+        "header": "nplurals=2; plural=(n > 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "gl",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "he",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "two",
+          "other"
+        ]
+      },
+      {
+        "lang": "hnj",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "hr",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "other"
+        ]
+      },
+      {
+        "lang": "hu",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "id",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "ig",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "ii",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "it",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "ja",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "jbo",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "jv",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "jw",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "kde",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "kea",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "km",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "ko",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "lkt",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "lo",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "lt",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && (n%100<10 || n%100>=20) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "lv",
+        "header": "nplurals=3; plural=(n%10==0 || (n%100>=11 && n%100<=19) ? 0 : n%10==1 && n%100!=11 ? 1 : 2);",
+        "forms": [
+          "zero",
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "zero",
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "ms",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "my",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "nb",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "nl",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "nn",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "no",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "nqo",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "osa",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "pl",
+        "header": "nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "many"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "pt",
+        "header": "nplurals=2; plural=(n > 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "pt-pt",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "ro",
+        "header": "nplurals=3; plural=(n==1 ? 0 : (n==0 || (n%100>0 && n%100<20)) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "other"
+        ]
+      },
+      {
+        "lang": "ru",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "many"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "sah",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "ses",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "sg",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "sk",
+        "header": "nplurals=3; plural=((n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "sr",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "other"
+        ]
+      },
+      {
+        "lang": "su",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "sv",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "th",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "to",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "tpi",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "tr",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "cldrCategories": [
+          "one",
+          "other"
+        ]
+      },
+      {
+        "lang": "uk",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "many"
+        ],
+        "cldrCategories": [
+          "one",
+          "few",
+          "many",
+          "other"
+        ]
+      },
+      {
+        "lang": "und",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "vi",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "wo",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "yo",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "yue",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      },
+      {
+        "lang": "zh",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "cldrCategories": [
+          "other"
+        ]
+      }
+    ],
+    "lookups": [
+      {
+        "requested": "pt",
+        "note": "CLDR states `pt` and `pt-PT` separately; `pt` is the rule Brazil uses and puts 0 in the singular.",
+        "header": "nplurals=2; plural=(n > 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "pt-PT",
+        "note": "European Portuguese puts 0 in the plural — the opposite answer from the same primary subtag.",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "pt-BR",
+        "note": "A region CLDR does not state falls through to its language.",
+        "header": "nplurals=2; plural=(n > 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "PT-br",
+        "note": "Case and separator are normalized before the lookup.",
+        "header": "nplurals=2; plural=(n > 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "pt-Latn-PT",
+        "note": "The REGION is tried before the script is dropped: truncating right-to-left alone would answer `pt-Latn-PT` with Brazil’s rule.",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "pt_PT",
+        "note": "Underscore form resolves identically to the dash form.",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "sr-Latn-RS",
+        "note": "Script + region strip down to `sr`.",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "ru_RU",
+        "note": "Region strip; the third slot stays `many`.",
+        "header": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);",
+        "forms": [
+          "one",
+          "few",
+          "many"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "zh-Hant",
+        "note": "Script strip onto a one-form language.",
+        "header": "nplurals=1; plural=0;",
+        "forms": [
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "xx",
+        "note": "Unmodelled: both tables answer with the SAME declared fallback, and both say so. A consumer that cannot survive a wrong plural skips the language here rather than applying the default.",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": false,
+        "cldrModelled": false
+      },
+      {
+        "requested": "es-419",
+        "note": "A region strip where the region is UN M.49 numeric. It resolves through the plain right-to-left truncation (two subtags), so it does NOT exercise the numeric alternative of the region regex — no table has a dashed numeric key today, which makes that branch unobservable rather than covered. Stated instead of implied.",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": true,
+        "cldrModelled": true
+      },
+      {
+        "requested": "sl",
+        "note": "THE CASE THE OTHER ROWS HIDE: gettext-unmodelled but CLDR-modelled. Slovenian gets the 2-form fallback from the gettext table while the CLDR table gives it FOUR categories — and a served `sl` bundle carries all four. The two flags are not redundant, and `isModelled` (gettext) is the one a compiler must guard on.",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": false,
+        "cldrModelled": true
+      },
+      {
+        "requested": "hi",
+        "note": "The same divergence with the CATEGORY SETS AGREEING, which is why counting categories is not a guard: CLDR gives `hi` exactly `[one, other]`, so the fallback looks right — but CLDR `hi one` is `i = 0 or n = 1`, which puts ZERO in the singular, while the fallback header `(n != 1)` puts it in the plural. Same categories, different boundary, wrong word for 0.",
+        "header": "nplurals=2; plural=(n != 1);",
+        "forms": [
+          "one",
+          "other"
+        ],
+        "isModelled": false,
+        "cldrModelled": true
+      }
+    ],
+    "serve": [
+      {
+        "name": "two_form_nested_placeholder",
+        "note": "Bodies keep their own braces. A parser that splits on `}` instead of counting depth loses the placeholder and truncates the message.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "1 file",
+          "other": "{count} files"
+        },
+        "message": "{count, plural, one{1 file} other{{count} files}}"
+      },
+      {
+        "name": "category_order_is_cldr_not_insertion",
+        "note": "Emission order is CLDR canonical (zero…other), NOT the order the forms were stored in. A consumer must key on the selector, never on position.",
+        "lang": "ru",
+        "param": "count",
+        "forms": {
+          "other": "файла",
+          "many": "файлов",
+          "one": "файл",
+          "few": "файлы"
+        },
+        "message": "{count, plural, one{файл} few{файлы} many{файлов} other{файла}}"
+      },
+      {
+        "name": "literal_selector_first",
+        "note": "`=N` literals emit before every category, ascending. They are not CLDR categories and no gettext slot maps to them.",
+        "lang": "en",
+        "param": "n",
+        "forms": {
+          "=0": "No files",
+          "one": "1 file",
+          "other": "{n} files"
+        },
+        "message": "{n, plural, =0{No files} one{1 file} other{{n} files}}"
+      },
+      {
+        "name": "printf_body_travels_verbatim",
+        "note": "printf bodies cross unchanged: `%1$s` keeps its argnum and `%%` is NOT un-doubled. A formatter that rewrote `%s` as `%%s` reached this seam once already.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "%1$s file (%%)",
+          "other": "%1$s files (%%)"
+        },
+        "message": "{count, plural, one{%1$s file (%%)} other{%1$s files (%%)}}"
+      },
+      {
+        "name": "apostrophe_is_not_icu_quoted",
+        "note": "The delivered ICU is NOT `canonicalIcu`: apostrophes and braces in a body are literal, never ICU-quoted. Quoting is a hashing artifact and lives only in the token preimage.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "It's 1 file",
+          "other": "It's {count} files"
+        },
+        "message": "{count, plural, one{It's 1 file} other{It's {count} files}}"
+      },
+      {
+        "name": "gettext_complete_language_gets_an_empty_other",
+        "note": "The bounded exception to the sentence above: ru/pl/uk/be have no `other` slot in their gettext rule, so a fully translated catalog arrives without one. The branch is emitted EMPTY rather than throwing the translation away — unreachable for integer counts in these languages. A consumer must tolerate `other{}` here.",
+        "lang": "ru",
+        "param": "count",
+        "forms": {
+          "one": "файл",
+          "few": "файла",
+          "many": "файлов"
+        },
+        "message": "{count, plural, one{файл} few{файла} many{файлов} other{}}"
+      },
+      {
+        "name": "incomplete_gettext_language_is_omitted",
+        "note": "Same language, one slot short: this is a real gap, so the key is left out of the bundle entirely and the reader falls back to the source.",
+        "lang": "ru",
+        "param": "count",
+        "forms": {
+          "one": "файл",
+          "few": "файла"
+        },
+        "message": null
+      },
+      {
+        "name": "missing_other_is_omitted",
+        "note": "No `other` and no gettext-rule excuse: the key is omitted. It is NOT served as `other{}` — an absent key falls back to the source, an empty branch is a hole in the page (#492).",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "1 file"
+        },
+        "message": null
+      },
+      {
+        "name": "blank_other_is_omitted",
+        "note": "Presence is judged on the TRIMMED body, not on the key. The doors drop a blank form before it can be stored (#492); this is the in-memory defense behind them.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "1 file",
+          "other": "   "
+        },
+        "message": null
+      },
+      {
+        "name": "category_outside_the_language_still_emits",
+        "note": "A category CLDR does not give the language is emitted anyway, with a warning, rather than dropped — a 3-slot `.po` for a 2-form language invents one. Nothing downstream selects it, so a consumer that filters against its own table is right to ignore it; one that trusts the message blindly must not choke on it.",
+        "lang": "es",
+        "param": "count",
+        "forms": {
+          "one": "1 archivo",
+          "other": "{count} archivos",
+          "form2": "inventada"
+        },
+        "message": "{count, plural, one{1 archivo} other{{count} archivos} form2{inventada}}"
+      },
+      {
+        "name": "body_edge_whitespace_is_load_bearing",
+        "note": "A body is emitted BYTE-FOR-BYTE, leading and trailing whitespace included. The door that drops blank forms (#492) does not trim the ones that survive, and only SOURCES are trimmed — a translation is not. A consumer that trims what it parses changes the rendered text.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "  1 file  ",
+          "other": "{count} files "
+        },
+        "message": "{count, plural, one{  1 file  } other{{count} files }}"
+      },
+      {
+        "name": "literal_selectors_ascend_numerically",
+        "note": "Three literals, because one cannot show an order: `=10` sorts AFTER `=2` — the sort is numeric, not lexicographic.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "=0": "none",
+          "=2": "pair",
+          "=10": "ten",
+          "one": "1",
+          "other": "n"
+        },
+        "message": "{count, plural, =0{none} =2{pair} =10{ten} one{1} other{n}}"
+      },
+      {
+        "name": "unknown_selectors_keep_insertion_order",
+        "note": "Two unknown selectors, because one cannot show an order: they emit last, in the order the value stored them, NOT sorted (`zform` before `aform`).",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "a",
+          "other": "b",
+          "zform": "z",
+          "aform": "x"
+        },
+        "message": "{count, plural, one{a} other{b} zform{z} aform{x}}"
+      },
+      {
+        "name": "blank_slot_breaks_the_gettext_completeness_excuse",
+        "note": "The other half of the ru/pl/uk/be exception, and the half that is easy to lose: the excuse only applies when every slot the rule defines is filled AFTER TRIMMING. A whitespace-only `many` is not filled, so this is an ordinary gap and the key is omitted — it does NOT get the empty-`other` treatment.",
+        "lang": "ru",
+        "param": "count",
+        "forms": {
+          "one": "файл",
+          "few": "файла",
+          "many": "  "
+        },
+        "message": null
+      },
+      {
+        "name": "blank_non_other_form_is_dropped_not_emitted",
+        "note": "A blank form is not a form, whatever the selector: `few` here is whitespace-only, so the served message reads exactly as if the key had never been there. Until #510 this was the asymmetry a consumer had to tolerate — a blank `other` omitted the whole key while a blank NON-`other` category shipped as `few{  }`, an empty branch that renders a hole. Not reachable through a door (`.normalized` drops every blank form on the way in), so this pins the RENDERER for a value assembled in memory. Note the input keeps the blank: the vector is about what a consumer receives, not about what is stored.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "a",
+          "few": "  ",
+          "other": "b"
+        },
+        "message": "{count, plural, one{a} other{b}}"
+      },
+      {
+        "name": "blank_literal_selector_is_dropped_too",
+        "note": "The same rule for a `=N` literal, which is a form like any other. Worth its own row because `=0{}` is the case where the hole is most visible: a literal exists to special-case one count, and an empty one renders nothing for exactly that count. The filled `=1` beside it is the control — the drop is per form, not a decision taken over the literals as a group, and the survivor keeps its leading position.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "=0": "  ",
+          "=1": "just one",
+          "one": "a",
+          "other": "b"
+        },
+        "message": "{count, plural, =1{just one} one{a} other{b}}"
+      },
+      {
+        "name": "dropping_the_last_non_other_form_does_not_synthesize",
+        "note": "The bound on the drop: with `one` blank there is nothing left but `other`, and the answer is a one-branch message — not a filler branch, and not an omitted key. `other` carries text, which is the only thing the omit rule ever asked.",
+        "lang": "en",
+        "param": "count",
+        "forms": {
+          "one": "  ",
+          "other": "b"
+        },
+        "message": "{count, plural, other{b}}"
+      }
+    ],
+    "parse": [
+      {
+        "name": "served_two_form_nested_placeholder",
+        "message": "{count, plural, one{1 file} other{{count} files}}",
+        "param": "count",
+        "forms": {
+          "one": "1 file",
+          "other": "{count} files"
+        }
+      },
+      {
+        "name": "served_category_order_is_cldr_not_insertion",
+        "message": "{count, plural, one{файл} few{файлы} many{файлов} other{файла}}",
+        "param": "count",
+        "forms": {
+          "one": "файл",
+          "few": "файлы",
+          "many": "файлов",
+          "other": "файла"
+        }
+      },
+      {
+        "name": "served_literal_selector_first",
+        "message": "{n, plural, =0{No files} one{1 file} other{{n} files}}",
+        "param": "n",
+        "forms": {
+          "=0": "No files",
+          "one": "1 file",
+          "other": "{n} files"
+        }
+      },
+      {
+        "name": "served_printf_body_travels_verbatim",
+        "message": "{count, plural, one{%1$s file (%%)} other{%1$s files (%%)}}",
+        "param": "count",
+        "forms": {
+          "one": "%1$s file (%%)",
+          "other": "%1$s files (%%)"
+        }
+      },
+      {
+        "name": "served_apostrophe_is_not_icu_quoted",
+        "message": "{count, plural, one{It's 1 file} other{It's {count} files}}",
+        "param": "count",
+        "forms": {
+          "one": "It's 1 file",
+          "other": "It's {count} files"
+        }
+      },
+      {
+        "name": "served_gettext_complete_language_gets_an_empty_other",
+        "message": "{count, plural, one{файл} few{файла} many{файлов} other{}}",
+        "param": "count",
+        "forms": {
+          "one": "файл",
+          "few": "файла",
+          "many": "файлов",
+          "other": ""
+        }
+      },
+      {
+        "name": "served_category_outside_the_language_still_emits",
+        "message": "{count, plural, one{1 archivo} other{{count} archivos} form2{inventada}}",
+        "param": "count",
+        "forms": {
+          "one": "1 archivo",
+          "other": "{count} archivos",
+          "form2": "inventada"
+        }
+      },
+      {
+        "name": "whitespace_around_selectors_and_commas",
+        "note": "Whitespace around the head and around each selector is insignificant; whitespace INSIDE a body is not.",
+        "message": "{ count , plural , one {1 file} other {{count} files} }",
+        "param": "count",
+        "forms": {
+          "one": "1 file",
+          "other": "{count} files"
+        }
+      },
+      {
+        "name": "apostrophes_are_NOT_icu_unescaped",
+        "note": "Bodies are returned verbatim: `''` stays two characters. The parse step does no ICU un-escaping, so it is the exact inverse of the emit step.",
+        "message": "{count, plural, one{It''s 1 file} other{It''s files}}",
+        "param": "count",
+        "forms": {
+          "one": "It''s 1 file",
+          "other": "It''s files"
+        }
+      },
+      {
+        "name": "non_cldr_selector_is_preserved",
+        "note": "An unknown selector is kept under its own name rather than folded into `other`, so nothing is silently lost.",
+        "message": "{count, plural, one{a} other{b} form2{c}}",
+        "param": "count",
+        "forms": {
+          "one": "a",
+          "other": "b",
+          "form2": "c"
+        }
+      },
+      {
+        "name": "empty_body",
+        "note": "The empty branch of the ru/pl/uk/be exception, seen from the reader side: it parses to a present key with an empty string.",
+        "message": "{count, plural, one{a} other{}}",
+        "param": "count",
+        "forms": {
+          "one": "a",
+          "other": ""
+        }
+      },
+      {
+        "name": "served_body_edge_whitespace_is_load_bearing",
+        "note": "The reader side of the same rule: the parser returns the body verbatim and does not trim it either. Whitespace around a SELECTOR is insignificant; whitespace inside a body is content.",
+        "message": "{count, plural, one{  1 file  } other{{count} files }}",
+        "param": "count",
+        "forms": {
+          "one": "  1 file  ",
+          "other": "{count} files "
+        }
+      },
+      {
+        "name": "served_literal_selectors_ascend_numerically",
+        "message": "{count, plural, =0{none} =2{pair} =10{ten} one{1} other{n}}",
+        "param": "count",
+        "forms": {
+          "=0": "none",
+          "=2": "pair",
+          "=10": "ten",
+          "one": "1",
+          "other": "n"
+        }
+      },
+      {
+        "name": "served_unknown_selectors_keep_insertion_order",
+        "message": "{count, plural, one{a} other{b} zform{z} aform{x}}",
+        "param": "count",
+        "forms": {
+          "one": "a",
+          "other": "b",
+          "zform": "z",
+          "aform": "x"
+        }
+      },
+      {
+        "name": "served_blank_non_other_form_is_dropped_not_emitted",
+        "message": "{count, plural, one{a} other{b}}",
+        "param": "count",
+        "forms": {
+          "one": "a",
+          "other": "b"
+        }
+      },
+      {
+        "name": "served_blank_literal_selector_is_dropped_too",
+        "message": "{count, plural, =1{just one} one{a} other{b}}",
+        "param": "count",
+        "forms": {
+          "=1": "just one",
+          "one": "a",
+          "other": "b"
+        }
+      },
+      {
+        "name": "served_dropping_the_last_non_other_form_does_not_synthesize",
+        "message": "{count, plural, other{b}}",
+        "param": "count",
+        "forms": {
+          "other": "b"
+        }
+      },
+      {
+        "name": "a_blank_branch_in_a_FOREIGN_message_parses_to_a_blank_form",
+        "note": "No serve twin on purpose — nothing this backend serves looks like this since #510. It is what the recovery parser does with a message written by SOMEBODY ELSE: it reports what the file says, blank branch included, rather than second-guessing it. The blank is then dropped by `.normalized` at the importer door, so it never reaches storage — parse reports, the door decides. A consumer reproducing the parser must not pre-filter here, or it will disagree on a file it did not write.",
+        "message": "{count, plural, one{a} few{  } other{b}}",
+        "param": "count",
+        "forms": {
+          "one": "a",
+          "few": "  ",
+          "other": "b"
+        }
+      }
+    ],
+    "parseRejects": [
+      {
+        "name": "plain_text",
+        "note": "Not a plural; the caller keeps it as text.",
+        "message": "Hello"
+      },
+      {
+        "name": "placeholder_only",
+        "note": "Braced, but not a plural head. A consumer must check the head, not the first character.",
+        "message": "{name}"
+      },
+      {
+        "name": "text_containing_a_placeholder",
+        "note": "Braces inside text do not make it a plural.",
+        "message": "Welcome {name}"
+      },
+      {
+        "name": "select_is_not_plural",
+        "note": "`select` is a different ICU argument type.",
+        "message": "{g, select, male{a} other{b}}"
+      },
+      {
+        "name": "unbalanced_body",
+        "note": "A body whose braces never close is rejected, not guessed at.",
+        "message": "{count, plural, one{a other{b}}"
+      },
+      {
+        "name": "truncated_message",
+        "note": "The outer brace is missing; rejected before the head is read.",
+        "message": "{count, plural, one{a}"
+      },
+      {
+        "name": "selector_with_no_body",
+        "note": "A selector with no `{…}` after it yields no forms.",
+        "message": "{count, plural, one}"
+      },
+      {
+        "name": "no_selectors",
+        "note": "A well-formed head with zero forms is not a usable plural.",
+        "message": "{count, plural, }"
+      }
+    ]
+  }
 }

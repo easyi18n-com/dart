@@ -1,0 +1,2 @@
+exit|0
+out|{"files_scanned":1,"total":0,"added":0,"orphans":0,"dynamics_count":0,"dynamics":[],"dynamics_truncated":false,"units":[],"truncated":false,"project_dir":"<project>","base_url":"https://api.easyi18n.com"}

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
+import 'package:easyi18n_cli/src/cli_output.dart';
 import 'package:easyi18n_cli/src/commands/extract_command.dart';
 import 'package:easyi18n_cli/src/lockfile.dart';
 import 'package:easyi18n_cli/src/logger.dart';
@@ -37,7 +38,7 @@ void main() {
   CommandRunner<int> runner() {
     final r = CommandRunner<int>('easyi18n', '')
       ..argParser.addOption('config', defaultsTo: 'easyi18n.yaml');
-    return r..addCommand(ExtractCommand(logger: logger));
+    return r..addCommand(ExtractCommand(output: CliOutput(logger: logger)));
   }
 
   test('reports extracted strings and never writes the lockfile', () async {
@@ -53,6 +54,31 @@ void f(c, name) {
     expect(out.toString(), contains('1 extractable'));
     expect(err.toString(), contains('non-literal source'));
     expect(File(p.join(dir.path, Lockfile.fileName)).existsSync(), isFalse);
+  });
+
+  test('a numeric lock project keeps its units in a handle extract', () async {
+    final config = p.join(dir.path, 'easyi18n.yaml');
+    File(config).writeAsStringSync('workspace: acme\nproject: demo\n');
+    File(p.join(dir.path, Lockfile.fileName)).writeAsStringSync(jsonEncode({
+      'version': 1,
+      'project': 123,
+      'units': [
+        {'source': 'Kept'},
+        {'source': 'Gone'},
+      ],
+    }));
+    writeSource('lib/a.dart', '''
+void f(c) {
+  c.tr('Kept');
+  c.tr('Fresh');
+}
+''');
+
+    final code = await runner().run(['--config', config, 'extract']);
+
+    expect(code, 0);
+    expect(out.toString(), contains('1 new since last push'));
+    expect(out.toString(), contains('1 orphan(s)'));
   });
 
   test(

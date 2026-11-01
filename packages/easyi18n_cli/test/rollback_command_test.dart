@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 import 'package:easyi18n_cli/src/api_client.dart';
+import 'package:easyi18n_cli/src/cli_output.dart';
 import 'package:easyi18n_cli/src/commands/rollback_command.dart';
 import 'package:easyi18n_cli/src/exceptions.dart';
 import 'package:easyi18n_cli/src/logger.dart';
@@ -58,13 +59,66 @@ void main() {
       ..argParser.addOption('config', defaultsTo: 'easyi18n.yaml');
     r.addCommand(
       RollbackCommand(
-        logger: CliLogger(out: out, err: StringBuffer()),
+        output: CliOutput(logger: CliLogger(out: out, err: StringBuffer())),
         apiClientFactory: factory,
         environment: const {'EASYI18N_TOKEN': 'eik_x'},
       ),
     );
     return r;
   }
+
+  test('flagged cells reach the success line and stderr — present, not '
+      'dropped (#605)', () async {
+    final err = StringBuffer();
+    TranslationsApiClient factory({
+      required String baseUrl,
+      required String token,
+    }) => TranslationsApiClient(
+      baseUrl: baseUrl,
+      token: token,
+      httpClient: MockClient((req) async {
+        requests.add(req);
+        return http.Response(
+          jsonEncode({
+            'versionId': '2026.07.09.4',
+            'keyCount': 3,
+            'restoredFrom': '2026.07.08.2',
+            'icuRejected': ['apples [es]: plural value is missing the '
+                "mandatory 'other' form"],
+            'icuRejectedTotal': 2,
+          }),
+          201,
+        );
+      }),
+    );
+    final r = CommandRunner<int>('easyi18n', '')
+      ..argParser.addOption('config', defaultsTo: 'easyi18n.yaml');
+    r.addCommand(
+      RollbackCommand(
+        output: CliOutput(logger: CliLogger(out: out, err: err)),
+        apiClientFactory: factory,
+        environment: const {'EASYI18N_TOKEN': 'eik_x'},
+      ),
+    );
+    final code = await r.run(['--config', writeConfig(), 'rollback']);
+    expect(code, 0);
+    expect(
+      out.toString(),
+      contains("2 cell(s) would be refused by today's publish gates"),
+    );
+    // The whole heading, noun included (#1175): asserting the tail alone
+    // ('are being served:') left this the one refusal line in the package
+    // whose noun nothing pinned — it is the second of rollback's two, and
+    // the source guard's `$what` pattern does not reach it either, because
+    // here the noun and `$what` are not adjacent.
+    expect(
+      err.toString(),
+      contains('2 cell(s) in the restored version fail ICU validation and '
+          'are being served:'),
+    );
+    expect(err.toString(), contains('apples [es]:'));
+    expect(err.toString(), contains('...and 1 more'));
+  });
 
   test('no argument rolls back to `previous`', () async {
     final code = await runner().run(['--config', writeConfig(), 'rollback']);
@@ -111,7 +165,7 @@ void main() {
       ..argParser.addOption('config', defaultsTo: 'easyi18n.yaml');
     r.addCommand(
       RollbackCommand(
-        logger: CliLogger(out: out, err: StringBuffer()),
+        output: CliOutput(logger: CliLogger(out: out, err: StringBuffer())),
         environment: const {},
       ),
     );
