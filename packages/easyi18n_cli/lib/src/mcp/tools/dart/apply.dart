@@ -62,7 +62,7 @@ final applyTool = McpTool(
     final plan = await runner.plan(
       config: config,
       configPath: configPath,
-      token: deps.requireToken(),
+      token: deps.requireToken(config.baseUrl),
       logger: deps.logger,
       sourceDir: sourceDir,
       apiClientFactory: deps.apiClientFactory,

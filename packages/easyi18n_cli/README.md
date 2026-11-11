@@ -90,7 +90,8 @@ catalogs:
 (`Localizable.xcstrings` first, `InfoPlist.xcstrings` never), sets
 `format: xcstrings` and `mode: a`, and scaffolds nothing else — the catalog is
 your file. Pass `--catalog <path>` to name a different one, or `--stack auto`
-to let the CLI pick between the Flutter and Xcode adapters. `easyi18n doctor`
+to let the CLI pick among the Flutter, Xcode, web, Android and Angular
+adapters. `easyi18n doctor`
 then checks the catalog instead of the runtime wiring, and `sync` is the
 command to run next.
 
@@ -115,8 +116,6 @@ set to the directory of the root file); `pull` writes each file back next to
 its sibling, and `init` writes the layout it finds. Under the other layouts
 such a split is refused before the upload, with the files named. Both
 `sourceRoot` and `sourceLayout` are required; existing YAML must add them.
-This unreleased contract requires a build containing the final redesign of
-PR #2098.
 [Input layouts and migration](https://docs.easyi18n.com/developers/agents/web)
 explain the choice and exclusions.
 
@@ -415,8 +414,11 @@ dart run easyi18n_cli:easyi18n doctor
   `assets/easyi18n/` offline floor (one file per published locale, or the web
   build logs a 404 for each missing one), `com.apple.security.network.client` in
   BOTH macOS `.entitlements` (without it, delivery fetches fail *silently* in
-  the sandbox), that `Easyi18nScope` is mounted and names its `baseUrl` when
-  the config is not production, and that `MaterialApp` declares
+  the sandbox), `android.permission.INTERNET` in the Android main or release
+  manifest (a warning: without it a release build cannot reach delivery, but
+  a dependency may add it when Gradle merges the manifests), that
+  `Easyi18nScope` is mounted and names its `baseUrl` when the config is not
+  production, and that `MaterialApp` declares
   `localizationsDelegates` and `supportedLocales` (without them `tr()`
   resolves `en` only).
 - **`AGENTS.md`**: warns when the easyi18n block is missing, stale (the
@@ -480,13 +482,14 @@ The server reads its settings from its own env, never from the agent:
 | `EASYI18N_TOKEN` | The API key. Create it in the dashboard as an **AI agent** key: every spend, publish and rollback it makes waits for a human approval. |
 | `EASYI18N_PROJECT_DIR` | The project, when the agent passes no `project_dir`. Falls back to the working directory. |
 | `EASYI18N_MCP_MAX_CREDITS` | The most one approval can authorize, in credits. Default 50; `0` refuses every real ingest. |
+| `EASYI18N_MCP_APPROVAL_WAIT_SECONDS` | How long the agent waits for an approval before it stops and tells the human. Default and maximum 600; a smaller value only shortens it. |
 | `EASYI18N_BASE_URL` | The only origin other than the easyi18n API the key may be sent to. A `baseUrl` in `easyi18n.yaml` that is not this, HTTPS easyi18n or loopback is refused. |
 
 The tools a project gets depend on its family. `status`, `doctor`, `init`,
 `authorize`, `fill_status`, `publish`, `rollback`, `pull` and `add_language`
 serve both. A Flutter project (`tr()` calls) uses `extract`, `push_preview`,
-`push` and `apply`; an Xcode String Catalog and a web project with JSON
-catalogs use `sync_preview` and `sync`.
+`push` and `apply`; an Xcode String Catalog, a web project with JSON
+catalogs, an Android app and an Angular app use `sync_preview` and `sync`.
 Calling the other family's tool answers `wrong_family` with the one to use.
 
 The spend loop is the same for both:
@@ -494,7 +497,9 @@ The spend loop is the same for both:
 1. `push_preview` or `sync_preview` estimates the credits. Nothing is spent.
 2. `authorize {action: translate, max_credits}` returns an `approval_url`.
    The human opens it and approves; the agent waits with
-   `authorize {operation_id}`.
+   `authorize {operation_id}`, which holds the call up to 45 s while the
+   operation is pending. The agent calls it again in the same turn until
+   the human answers, for up to 10 minutes.
 3. `push {operation_id}` or `sync {operation_id}` sends the strings and
    queues their translation. An ingest that costs 0 needs no operation.
 4. `fill_status` polls until `complete`.

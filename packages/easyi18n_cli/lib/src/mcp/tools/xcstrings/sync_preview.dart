@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_mcp/server.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../adapters/angular_adapter.dart' show angularMessages, kAngularFormat;
 import '../../../adapters/stack_adapters.dart';
 import '../../../api_client.dart';
 import '../../../config.dart';
@@ -66,7 +68,7 @@ Future<CallToolResult> withSyncPreview(
     );
   }
   refuseUntrustedTarget(config.baseUrl, environment: deps.environment);
-  final token = deps.requireToken(scope: 'translate');
+  final token = deps.requireToken(config.baseUrl, scope: 'translate');
   const runner = SyncRunner();
   final scan = runner.scan(config, configPath: configPath);
   return withProject(
@@ -112,6 +114,21 @@ Map<String, Object?> languageFilesJson(SyncPreview preview,
     'skipped_language_files': preview.skippedTargets,
 };
 
+/// The `{$…}` tokens of an Angular file, sorted: the fill refuses a
+/// translation that drops or renames one. Empty for any other format, so
+/// other stacks answer as before.
+List<String> protectedTokens(SyncPreview preview) {
+  if (preview.format != kAngularFormat) return const [];
+  final messages = angularMessages(
+      jsonDecode(utf8.decode(preview.bytes, allowMalformed: true)));
+  return {
+    for (final text in messages?.values ?? const <String>[])
+      for (final token in _angularToken.allMatches(text)) token[0]!,
+  }.toList()..sort();
+}
+
+final RegExp _angularToken = RegExp(r'\{\$\w+\}');
+
 /// `sync_preview` — file-first adapter. What a sync of the configured catalog
 /// would create, update and cost, without registering or spending anything.
 final syncPreviewTool = McpTool(
@@ -145,6 +162,7 @@ final syncPreviewTool = McpTool(
           Easyi18nConfig.load(File(configPath), logger: deps.logger),
           family: 'file-first',
         );
+        final tokens = protectedTokens(preview);
         final blocked = format != null && format.readiness.blocksPull;
         final next = result.wouldExceedKeyCap
             ? 'plan_limit'
@@ -160,6 +178,8 @@ final syncPreviewTool = McpTool(
                   'sync_preview: ${result.created} new key(s), '
                   '${result.conflictsTotal} conflict(s), '
                   '~${creditsOf(result.estimatedCredits)} credit(s)\n'
+                  '${tokens.isEmpty ? '' : 'protected tokens: ${tokens.join(' ')} '
+                      '- every translation keeps them as they are\n'}'
                   'ceiling: $ceiling credit(s) per authorization\n'
                   'next: $next'
                   '${result.wouldExceedKeyCap ? '\n${planLimitText('sync')}' : ''}'
@@ -170,6 +190,7 @@ final syncPreviewTool = McpTool(
             ...catalogJson(preview, root),
             ...syncResultJson(result),
             ...languageFilesJson(preview),
+            if (tokens.isNotEmpty) 'protected_tokens': tokens,
             'ceiling': {'env_max': ceiling},
             'output_format': ?format?.toJson(),
             'next': next,

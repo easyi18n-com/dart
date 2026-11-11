@@ -7,8 +7,8 @@ import '../apply/tr_rewriter.dart';
 import '../apply_runner.dart';
 import '../cli_output.dart';
 import '../config.dart';
-import '../exceptions.dart';
 import '../logger.dart';
+import '../session.dart' show requireCredential;
 
 /// Builds the API client `apply` talks to. Injected so tests can swap in a
 /// `MockClient`-backed instance.
@@ -37,7 +37,7 @@ class ApplyCommand extends Command<int> with JsonPresenter {
         'token',
         help:
             'API key (eik_) with the read scope. '
-            'Defaults to \$EASYI18N_TOKEN.',
+            'Defaults to \$EASYI18N_TOKEN, then your easyi18n login.',
       )
       ..addOption(
         'source-dir',
@@ -57,8 +57,6 @@ class ApplyCommand extends Command<int> with JsonPresenter {
   final CliOutput output;
   final Map<String, String> _environment;
 
-  static const String tokenEnvVar = 'EASYI18N_TOKEN';
-
   @override
   String get name => 'apply';
 
@@ -74,15 +72,11 @@ class ApplyCommand extends Command<int> with JsonPresenter {
     final config = Easyi18nConfig.load(File(configPath), logger: _logger);
     final write = results['write'] as bool;
 
-    final token =
-        (results['token'] as String?)?.trim() ??
-        _environment[tokenEnvVar]?.trim();
-    if (token == null || token.isEmpty) {
-      throw CliException(
-        'No credential. Set $tokenEnvVar or pass --token.\n'
-        'Create an API key in your project settings (needs the read scope).',
-      );
-    }
+    final token = requireCredential(
+      token: results['token'] as String?, environment: _environment,
+      baseUrl: config.baseUrl,
+      need: 'Create an API key in your project settings (needs the read scope).',
+    );
 
     final sourceDir = results['source-dir'] as String;
     final plan = await _runner.plan(

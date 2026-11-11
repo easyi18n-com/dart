@@ -12,7 +12,7 @@ import 'package:yaml/yaml.dart';
 import 'project_ref.dart';
 
 /// Version constraint written for the runtime SDK dependency.
-const String kRuntimeDependency = '^0.2.0';
+const String kRuntimeDependency = '^1.0.0';
 
 /// The offline-floor assets directory (trailing slash: pubspec asset dirs
 /// require it to include the folder's files).
@@ -21,19 +21,22 @@ const String kAssetsFloorDir = 'assets/easyi18n/';
 /// macOS sandbox entitlement the SDK needs for delivery fetches (friction F3).
 const String kNetworkClientKey = 'com.apple.security.network.client';
 
+/// Android permission a release build needs for delivery fetches; the
+/// `flutter create` template declares it for debug and profile only (#2340).
+const String kInternetPermission = 'android.permission.INTERNET';
+
 /// Derived CLI state dir (`CliState.dirName`) — cache, never committed.
 const String kStateIgnoreEntry = '.easyi18n/';
 
-/// Adds `easyi18n: ^x.y.z` under `dependencies:`, or raises a constraint an
-/// earlier init wrote that cannot resolve the SDK [localizeApp] needs. Null
-/// when the package is already a dependency (any form: version, path, git,
-/// override) that can.
+/// Adds `easyi18n: ^x.y.z` under `dependencies:`, or raises the constraint
+/// an earlier init wrote ([outdatedRuntimeConstraint]). Null when the
+/// package is already a dependency in any other form (version, path, git,
+/// override).
 String? addRuntimeDependency(String pubspec) {
-  final stale = staleRuntimeConstraint(pubspec);
-  if (stale != null) {
+  if (outdatedRuntimeConstraint(pubspec) != null) {
     // The line as init wrote it, or hand-quoted / commented since; a flow
     // mapping (`{easyi18n: ^0.1.0}`) has no such line and is left alone.
-    final line = RegExp(r'^(\s+easyi18n:\s*)(["\x27]?)\^0\.1\.[^\s"\x27#]*\2',
+    final line = RegExp(r'^(\s+easyi18n:\s*)(["\x27]?)\^0\.[12]\.[^\s"\x27#]*\2',
         multiLine: true);
     if (!line.hasMatch(pubspec)) return null;
     return pubspec.replaceFirstMapped(
@@ -42,14 +45,22 @@ String? addRuntimeDependency(String pubspec) {
   return _addDependency(pubspec, 'easyi18n', ['  easyi18n: $kRuntimeDependency']);
 }
 
-/// The `easyi18n:` constraint when it is a `^0.1.x` from an earlier init,
-/// which excludes the 0.2.0 that `Easyi18nScope.localesOf` ships in.
-String? staleRuntimeConstraint(String pubspec) {
+/// The `easyi18n:` constraint when it is a `^0.1.x` or `^0.2.x` from an
+/// earlier init, which excludes the SDK 1.0.0.
+String? outdatedRuntimeConstraint(String pubspec) {
   final deps = _tryLoadMap(pubspec)?['dependencies'];
   final constraint = deps is Map ? deps['easyi18n'] : null;
-  return constraint is String && constraint.startsWith('^0.1.')
+  return constraint is String && constraint.startsWith(RegExp(r'\^0\.[12]\.'))
       ? constraint
       : null;
+}
+
+/// The outdated constraint when it is a `^0.1.x`, which also excludes the
+/// 0.2.0 that `Easyi18nScope.localesOf` ships in. A `^0.2.x` still resolves
+/// it, so `doctor` passes it while `init` raises it (#2526).
+String? staleRuntimeConstraint(String pubspec) {
+  final outdated = outdatedRuntimeConstraint(pubspec);
+  return outdated != null && outdated.startsWith('^0.1.') ? outdated : null;
 }
 
 /// Adds the `flutter_localizations` SDK package, which
@@ -148,6 +159,70 @@ String? patchEntitlements(String plist) {
       '\t$key\n\t<true/>\n'
       '${plist.substring(close)}';
 }
+
+enum InternetPermission { declared, removed, missing }
+
+/// What an `AndroidManifest.xml` says about [kInternetPermission]. A
+/// `<uses-permission>` naming it declares it, unless it carries
+/// `tools:node="remove"`, which strips it from the merged manifest. Both
+/// attributes are read under the prefixes the `<manifest>` tag binds.
+InternetPermission internetPermission(String manifest) {
+  final xml = _maskComments(manifest);
+  final root = _androidTag('manifest').firstMatch(xml);
+  final xmlns = root == null
+      ? const <String, String>{}
+      : _androidAttributes(root[0]!);
+  final name = '${_prefix(xmlns, _kAndroidNs) ?? 'android'}:name';
+  final node = '${_prefix(xmlns, _kToolsNs) ?? 'tools'}:node';
+  final tags = _androidTag('uses-permission')
+      .allMatches(xml)
+      .map((m) => _androidAttributes(m[0]!))
+      .where((a) => a[name] == kInternetPermission);
+  if (tags.isEmpty) return InternetPermission.missing;
+  return tags.any((a) => a[node] == 'remove')
+      ? InternetPermission.removed
+      : InternetPermission.declared;
+}
+
+/// Declares [kInternetPermission] right after the opening `<manifest>` tag,
+/// under the prefix that tag binds to the Android namespace. Null when the
+/// manifest already names it, has no such tag, or the tag binds no prefix.
+String? addInternetPermission(String manifest) {
+  if (internetPermission(manifest) != InternetPermission.missing) return null;
+  final open = _androidTag('manifest')
+      .firstMatch(_maskComments(manifest));
+  if (open == null || open[0]!.endsWith('/>')) return null;
+  final android = _prefix(_androidAttributes(open[0]!), _kAndroidNs);
+  if (android == null) return null;
+  return '${manifest.substring(0, open.end)}\n'
+      '    <uses-permission $android:name="$kInternetPermission" />'
+      '${manifest.substring(open.end)}';
+}
+
+const _kAndroidNs = 'http://schemas.android.com/apk/res/android';
+const _kToolsNs = 'http://schemas.android.com/tools';
+
+/// The prefix an `xmlns:` declaration among [attributes] binds to [uri].
+String? _prefix(Map<String, String> attributes, String uri) =>
+    attributes.entries
+        .where((e) => e.key.startsWith('xmlns:') && e.value == uri)
+        .firstOrNull
+        ?.key
+        .substring('xmlns:'.length);
+
+// Consume quoted values whole: a > or attribute name inside one is text.
+RegExp _androidTag(String name) => RegExp(
+    '<$name(?=[\\s/>])' r'''(?:[^<>"']|"[^"]*"|'[^']*')*>''');
+
+Map<String, String> _androidAttributes(String tag) => {
+  for (final m in RegExp(r'''([^\s=<>/"']+)\s*=\s*("([^"]*)"|'([^']*)')''')
+      .allMatches(tag))
+    m[1]!: m[3] ?? m[4]!,
+};
+
+/// Blanks XML comments in place, so a match keeps its offset in [xml].
+String _maskComments(String xml) => xml.replaceAllMapped(
+    RegExp(r'<!--.*?-->', dotAll: true), (m) => ' ' * m[0]!.length);
 
 /// Appends the derived-state dir to `.gitignore`. Null when already ignored.
 String? addGitignoreEntry(String gitignore) {

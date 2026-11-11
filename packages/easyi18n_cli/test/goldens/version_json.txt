@@ -1,2 +1,2 @@
 exit|0
-out|{"version":"1.0.0"}
+out|{"version":"1.2.2"}

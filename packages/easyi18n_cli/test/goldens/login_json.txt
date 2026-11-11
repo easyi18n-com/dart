@@ -1,0 +1,4 @@
+exit|0
+err|Opening your browser. Confirm you see the code BCDF-GHJK
+err|Waiting for the approval (Ctrl-C cancels)...
+out|{"email":"dev@acme.test","base_url":"http://localhost:8080","expires_at":"2026-12-03T21:44:13.324Z"}

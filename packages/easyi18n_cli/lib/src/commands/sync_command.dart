@@ -13,6 +13,7 @@ import '../logger.dart';
 import '../output_format.dart';
 import '../resolve.dart';
 import '../security.dart';
+import '../session.dart';
 import '../sync_runner.dart';
 
 /// Builds the API client `sync` talks to (same seam as pull/push).
@@ -56,7 +57,7 @@ class SyncCommand extends Command<int>
         'token',
         help:
             'API key (eik_) with the translate + publish + read scopes. '
-            'Defaults to \$EASYI18N_TOKEN.',
+            'Defaults to \$EASYI18N_TOKEN, then your easyi18n login.',
       )
       ..addFlag(
         'dry-run',
@@ -105,7 +106,6 @@ class SyncCommand extends Command<int>
 
   static const SyncRunner _runner = SyncRunner();
 
-  static const String tokenEnvVar = 'EASYI18N_TOKEN';
   static const Duration _defaultPollTimeout = Duration(minutes: 10);
 
   final CliOutput output;
@@ -165,15 +165,12 @@ class SyncCommand extends Command<int>
       );
     }
 
-    final token =
-        (results['token'] as String?)?.trim() ??
-        _environment[tokenEnvVar]?.trim();
-    if (token == null || token.isEmpty) {
-      throw CliException(
-        'No API key. Pass --token or set $tokenEnvVar (an eik_ key with the '
-        'translate, publish and read scopes).',
-      );
-    }
+    final token = requireCredential(
+      token: results['token'] as String?, environment: _environment,
+      baseUrl: config.baseUrl,
+      need: 'Create an API key in your project settings with the translate, '
+          'publish and read scopes.',
+    );
     warnOnUntrustedTarget(config.baseUrl, _logger);
     final client = _apiClientFactory(baseUrl: config.baseUrl, token: token);
     final adoption = noPublish ? null : OutputFormatAdoption(config.format);

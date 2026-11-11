@@ -11,6 +11,8 @@ import 'package:easyi18n_cli/src/scaffold.dart';
 import 'package:test/test.dart';
 import 'package:yaml/yaml.dart';
 
+import 'support/flutter_android.dart';
+
 void main() {
   late Directory dir;
   late StringBuffer out;
@@ -28,7 +30,10 @@ void main() {
   CommandRunner<int> runner({String? Function(String)? prompt}) {
     final r = CommandRunner<int>('easyi18n', '')
       ..argParser.addOption('config', defaultsTo: 'easyi18n.yaml');
-    r.addCommand(InitCommand(output: CliOutput(logger: logger), prompt: prompt ?? (_) => null));
+    // An empty environment: a login in the real HOME would take a ref-less
+    // init to the server (#2584).
+    r.addCommand(InitCommand(output: CliOutput(logger: logger),
+        prompt: prompt ?? (_) => null, environment: const {}));
     return r;
   }
 
@@ -97,7 +102,7 @@ class MyApp extends StatelessWidget {
       // Pubspec: dependency + assets floor, still valid YAML.
       final pubspec = fileAt('pubspec.yaml').readAsStringSync();
       final doc = loadYaml(pubspec) as Map;
-      expect((doc['dependencies'] as Map).containsKey('easyi18n'), isTrue);
+      expect((doc['dependencies'] as Map)['easyi18n'], '^1.0.0');
       expect((doc['flutter'] as Map)['assets'], contains(kAssetsFloorDir));
 
       // Floor dir.
@@ -166,9 +171,26 @@ class MyApp extends StatelessWidget {
       fileAt('pubspec.yaml').writeAsStringSync(
           pubspec.replaceFirst('dependencies:', 'dependencies:\n  easyi18n: ^0.1.0'));
       expect(await runInit(['--project-id', 'proj_abc']), 0);
-      expect(out.toString(), contains('raised easyi18n ^0.1.0 to ^0.2.0'));
+      expect(out.toString(), contains('raised easyi18n ^0.1.0 to ^1.0.0'));
       final doc = loadYaml(fileAt('pubspec.yaml').readAsStringSync()) as Map;
-      expect((doc['dependencies'] as Map)['easyi18n'], '^0.2.0');
+      expect((doc['dependencies'] as Map)['easyi18n'], '^1.0.0');
+    });
+
+    test('raises the ^0.2.x pin a 1.0.0 init left, keeping its comment, and '
+        'a re-run is ok', () async {
+      writeFlutterFixture();
+      final pubspec = fileAt('pubspec.yaml').readAsStringSync();
+      fileAt('pubspec.yaml').writeAsStringSync(pubspec.replaceFirst(
+          'dependencies:', 'dependencies:\n  easyi18n: ^0.2.1 # pinned'));
+      expect(await runInit(['--project-id', 'proj_abc']), 0);
+      expect(out.toString(), contains('raised easyi18n ^0.2.1 to ^1.0.0'));
+      expect(fileAt('pubspec.yaml').readAsStringSync(),
+          contains('  easyi18n: ^1.0.0 # pinned\n'));
+
+      out.clear();
+      expect(await runInit(['--project-id', 'proj_abc']), 0);
+      expect(out.toString(), contains('easyi18n already a dependency'));
+      expect(out.toString(), isNot(contains('raised easyi18n')));
     });
 
     test('a main.dart whose runApp bails still gets its locales wired',
@@ -265,6 +287,101 @@ void alt() { runApp(B()); }
       expect(code, 0);
       expect(out.toString(), contains('no macOS target'));
     });
+
+    // `flutter create` declares INTERNET for debug runs only, so a release
+    // build never reaches delivery.
+    group('Android release permission (#2340)', () {
+      String manifest() => fileAt(kMainManifest).readAsStringSync();
+      String patched(String verb) =>
+          '$verb  ${dir.path}/$kMainManifest - declared android.permission.INTERNET';
+
+      test('declares it in the main manifest, right after <manifest>',
+          () async {
+        writeFlutterFixture();
+        writeFlutterAndroid(dir.path);
+        expect(await runInit(['--project-id', 'proj_abc']), 0);
+        expect(manifest(), startsWith('<manifest xmlns:android='
+            '"http://schemas.android.com/apk/res/android">\n'
+            '    $kInternetLine\n    <application'));
+        expect(out.toString(), contains(patched('patched')));
+      });
+
+      test('a second run reports it and leaves the file alone', () async {
+        writeFlutterFixture();
+        writeFlutterAndroid(dir.path);
+        await runInit(['--project-id', 'proj_abc']);
+        final once = manifest();
+        out.clear();
+        expect(await runInit(['--project-id', 'proj_abc']), 0);
+        expect(manifest(), once);
+        expect(out.toString(), contains('ok  ${dir.path}/$kMainManifest - '
+            'android.permission.INTERNET already declared'));
+      });
+
+      test('--dry-run says it would patch and writes nothing', () async {
+        writeFlutterFixture();
+        writeFlutterAndroid(dir.path);
+        final before = manifest();
+        expect(await runInit(['--project-id', 'proj_abc', '--dry-run']), 0);
+        expect(manifest(), before);
+        expect(out.toString(), contains(patched('would patch')));
+      });
+
+      test('a manifest that removes it is left as the app wrote it', () async {
+        writeFlutterFixture();
+        writeFlutterAndroid(dir.path,
+            mainExtra: '    <uses-permission android:name='
+                '"android.permission.INTERNET" tools:node="remove" />\n');
+        final before = manifest();
+        expect(await runInit(['--project-id', 'proj_abc']), 0);
+        expect(manifest(), before);
+        expect(out.toString(), contains('skipped  ${dir.path}/$kMainManifest - '
+            'android.permission.INTERNET removed'));
+      });
+
+      test('an unreadable manifest is skipped and init still wires main.dart',
+          () async {
+        writeFlutterFixture();
+        writeFlutterAndroid(dir.path);
+        fileAt(kMainManifest).writeAsBytesSync([0xff, 0xfe, 0x3c]);
+        expect(await runInit(['--project-id', 'proj_abc']), 0);
+        expect(out.toString(), contains(
+            'skipped  ${dir.path}/$kMainManifest - cannot read it'));
+        expect(fileAt('lib/main.dart').readAsStringSync(),
+            contains('Easyi18nScope('));
+      });
+
+      test('no Android target is skipped', () async {
+        writeFlutterFixture();
+        expect(await runInit(['--project-id', 'proj_abc']), 0);
+        expect(out.toString(), contains(
+            'skipped  ${dir.path}/$kMainManifest - no Android target'));
+        expect(fileAt(kMainManifest).existsSync(), isFalse);
+      });
+
+      test('a file without a manifest opening tag is skipped', () async {
+        writeFlutterFixture();
+        writeFlutterAndroid(dir.path);
+        fileAt(kMainManifest).writeAsStringSync('not a manifest');
+        expect(await runInit(['--project-id', 'proj_abc']), 0);
+        expect(manifest(), 'not a manifest');
+        expect(out.toString(), contains('no <manifest> tag'));
+        expect(fileAt('lib/main.dart').readAsStringSync(),
+            contains('Easyi18nScope('));
+      });
+
+      test('a root with another Android prefix gets the line in that prefix',
+          () async {
+        writeFlutterFixture();
+        writeFlutterAndroid(dir.path);
+        fileAt(kMainManifest).writeAsStringSync(manifest()
+            .replaceAll('xmlns:android=', 'xmlns:a=')
+            .replaceAll('android:', 'a:'));
+        expect(await runInit(['--project-id', 'proj_abc']), 0);
+        expect(manifest(), contains('android">\n    <uses-permission '
+            'a:name="android.permission.INTERNET" />\n    <application'));
+      });
+    });
   });
 
   group('Mode A (#415)', () {
@@ -283,9 +400,13 @@ void alt() { runApp(B()); }
     test('--mode a writes only config + gitignore; the customer tree is '
         'untouched', () async {
       writeFlutterFixture();
+      writeFlutterAndroid(dir.path);
       final before = runtimeSnapshot();
+      final manifestBefore = fileAt(kMainManifest).readAsStringSync();
       final code = await runInit(['--project-id', 'proj_abc', '--mode', 'a']);
       expect(code, 0);
+      expect(fileAt(kMainManifest).readAsStringSync(), manifestBefore,
+          reason: 'no runtime fetches, so no INTERNET to declare (#2340)');
 
       final config = Easyi18nConfig.load(File(configPath()));
       expect(config.mode, 'a');

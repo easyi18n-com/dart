@@ -1,2 +1,2 @@
 exit|1
-out|{"error":{"message":"No credential. Set EASYI18N_TOKEN or pass --token.\nCreate an API key in your project settings (needs the publish scope).","code":"cli_error","statusCode":null,"retryable":false}}
+out|{"error":{"message":"No credential for https://api.easyi18n.com. Run 'easyi18n login', set EASYI18N_TOKEN or pass --token.\nCreate an API key in your project settings (needs the publish scope).","code":"cli_error","statusCode":null,"retryable":false}}

@@ -112,6 +112,10 @@ void main() {
 
   const env = {'EASYI18N_TOKEN': 'eik_x'};
 
+  // `init` ends on whether a login is stored for its origin: a HOME of the
+  // test's own, with nothing in it, keeps the developer's login out (#2751).
+  Map<String, String> noLogin() => {'HOME': p.join(dir.path, 'home')};
+
   // ----- init ----------------------------------------------------------------
 
   test('init', () async {
@@ -150,7 +154,8 @@ class MyApp extends StatelessWidget {
 ''');
 
     final code = await exitCodeOf(
-      runnerFor(InitCommand(output: CliOutput(logger: logger), prompt: (_) => null)),
+      runnerFor(InitCommand(output: CliOutput(logger: logger), prompt: (_) => null,
+          environment: noLogin())),
       ['--config', configPath(), 'init', '--project-id', 'proj_abc'],
     );
 
@@ -169,7 +174,8 @@ class MyApp extends StatelessWidget {
         '{"sourceLanguage":"es","strings":{"Hola":{}},"version":"1.0"}');
 
     final code = await exitCodeOf(
-      runnerFor(InitCommand(output: CliOutput(logger: logger), prompt: (_) => null)),
+      runnerFor(InitCommand(output: CliOutput(logger: logger), prompt: (_) => null,
+          environment: noLogin())),
       ['--config', configPath(), 'init', '--stack', 'xcode',
        '--project-id', 'proj_abc'],
     );
@@ -187,7 +193,7 @@ name: demo_app
 dependencies:
   flutter:
     sdk: flutter
-  easyi18n: ^0.2.0
+  easyi18n: ^1.0.0
 
 flutter:
   assets:
@@ -1111,7 +1117,8 @@ void build(c, name) {
     expect(code, 1);
     expectJsonGolden('rollback_json_error', code!, transcript.records, check: (json) {
       expect(json['error']['message'],
-          'No credential. Set EASYI18N_TOKEN or pass --token.\n'
+          "No credential for https://api.easyi18n.com. Run 'easyi18n login', "
+          'set EASYI18N_TOKEN or pass --token.\n'
           'Create an API key in your project settings (needs the publish scope).');
       expect(json['error']['retryable'], false);
     });

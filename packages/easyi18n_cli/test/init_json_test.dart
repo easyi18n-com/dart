@@ -27,7 +27,10 @@ void main() {
     dir = Directory.systemTemp.createTempSync('init_json');
     out = StringBuffer();
     err = StringBuffer();
-    runner = Easyi18nCommandRunner(output: CliOutput(out: out, err: err));
+    // An empty environment: a login in the real HOME would take a ref-less
+    // init to the server (#2584).
+    runner = Easyi18nCommandRunner(output: CliOutput(out: out, err: err),
+        environment: const {});
     File('${dir.path}/pubspec.yaml').writeAsStringSync(
         'name: demo\ndependencies:\n  flutter:\n    sdk: flutter\nflutter:\n');
   });
@@ -103,15 +106,16 @@ void main() {
   });
 
   // Whoever types `init` decides what to change, so the CLI keeps naming what
-  // web detection needs; only the MCP refusal leaves it out (#2470).
-  test('the CLI refusal names what web detection needs', () async {
+  // angular and web detection need; only the MCP refusal leaves it out (#2470).
+  test('the CLI refusal names what angular and web detection need', () async {
     File('${dir.path}/pubspec.yaml').deleteSync();
     File('${dir.path}/package.json').writeAsStringSync('{}');
     expect(await run(['--stack', 'auto', '--project-id', 'p1']), 1);
     expect(jsonDecode(out.toString())['error']['message'],
-        'No supported stack found at ${dir.path} (web needs one of '
+        'No supported stack found at ${dir.path} (angular needs '
+        '@angular/localize in package.json and an angular.json; web needs one of '
         '@jsverse/transloco, @ngx-translate/core, i18next in package.json). '
-        'Supported: flutter, xcode, web, android; roadmap: $stackRoadmap.');
+        'Supported: flutter, xcode, web, android, angular; roadmap: $stackRoadmap.');
   });
 
   for (final stack in ['swift', 'Flutter']) {
@@ -119,7 +123,7 @@ void main() {
       expect(await run(['--stack', stack, '--project-id', 'p1']), 1);
       final error = jsonDecode(out.toString())['error'];
       expect(error['message'],
-          'Unknown stack "$stack". Supported: flutter, xcode, web, android, auto; '
+          'Unknown stack "$stack". Supported: flutter, xcode, web, android, angular, auto; '
           'roadmap: $stackRoadmap.');
       expect(error['retryable'], false);
       expect(File('${dir.path}/easyi18n.yaml').existsSync(), isFalse);
@@ -137,7 +141,8 @@ void main() {
     final logger = _Logger(out, err);
     final output = CliOutput(logger: logger)..json = true;
     var prompts = 0;
-    final command = InitCommand(output: output, prompt: (_) { prompts++; return 'p1'; });
+    final command = InitCommand(output: output, environment: const {},
+        prompt: (_) { prompts++; return 'p1'; });
     final bare = CommandRunner<int>('test', '')
       ..argParser.addOption('config', defaultsTo: '${dir.path}/easyi18n.yaml')
       ..addCommand(command);
@@ -192,6 +197,114 @@ void main() {
     expect(steps[1]['detail'], 'keeps project old, not new (use --force to rewrite)');
     expect(steps[2]['detail'], 'keeps mode: a, not b (use --force to rewrite)');
     expect(err.toString(), isEmpty);
+  });
+
+  // `doctor` grades a tree with `adapterFor`, and its remedies say
+  // `easyi18n init` without --stack: an init that picked anything else would
+  // scaffold Flutter into a web app and never converge with doctor (#2575).
+  group('without --stack, init sets up the stack doctor grades', () {
+    void write(String root, String path, String text) => File('$root/$path')
+      ..createSync(recursive: true)
+      ..writeAsStringSync(text);
+    Future<Map> initIn(String root, List<String> flags) async {
+      final sink = StringBuffer();
+      final code = await Easyi18nCommandRunner(
+              output: CliOutput(out: sink, err: err))
+          .run(['--json', '--config', '$root/easyi18n.yaml', 'init',
+              '--project-id', 'p1', ...flags]);
+      expect(code, 0, reason: '$sink');
+      return jsonDecode(sink.toString()) as Map;
+    }
+    void angular(String root, {String extra = ''}) {
+      write(root, 'package.json', '{"dependencies": {"@angular/localize": '
+          '"^20.0.0"$extra}}');
+      write(root, 'angular.json', '{"projects": {"app": {"root": ""}}}');
+      write(root, 'src/locale/messages.json',
+          '{"locale": "en", "translations": {"hello": "Hello"}}');
+    }
+    final trees = <String, (String, void Function(String))>{
+      'web': ('web', (root) {
+        write(root, 'package.json', '{"dependencies": {"i18next": "^26.0.0"}}');
+        write(root, 'src/assets/i18n/en.json', '{"hello": "Hello"}');
+      }),
+      'xcode': ('xcode', (root) {
+        write(root, 'App.xcodeproj/project.pbxproj', '// !\$*UTF8*\$!\n');
+        write(root, 'App/Localizable.xcstrings', '{"sourceLanguage": "en", '
+            '"strings": {}, "version": "1.0"}');
+      }),
+      'android': ('android', (root) {
+        write(root, 'settings.gradle', "include ':app'\n");
+        write(root, 'app/src/main/res/values/strings.xml',
+            '<resources><string name="hi">Hi</string></resources>');
+      }),
+      'angular': ('angular', angular),
+      // `auto` refuses it as ambiguous; doctor grades it web until a config
+      // says angular_json.
+      'angular with i18next': ('web', (root) {
+        angular(root, extra: ', "i18next": "^26.0.0"');
+        write(root, 'src/assets/i18n/en.json', '{"hello": "Hello"}');
+      }),
+    };
+    for (final MapEntry(key: tree, value: (stack, build)) in trees.entries) {
+      test('the $tree tree gets what --stack $stack writes, not Flutter',
+          () async {
+        File('${dir.path}/pubspec.yaml').deleteSync();
+        final named = Directory.systemTemp.createTempSync('init_named');
+        addTearDown(() => named.deleteSync(recursive: true));
+        build(dir.path);
+        build(named.path);
+        expect((await initIn(dir.path, []))['stack'], stack);
+        await initIn(named.path, ['--stack', stack]);
+        for (final file in ['easyi18n.yaml', 'AGENTS.md']) {
+          expect(File('${dir.path}/$file').readAsStringSync(),
+              File('${named.path}/$file').readAsStringSync(), reason: file);
+        }
+        expect(Directory('${dir.path}/assets/easyi18n').existsSync(), isFalse);
+      });
+    }
+
+    test('the existing config decides like in doctor: a web app that chose '
+        'android is rewritten as android', () async {
+      File('${dir.path}/pubspec.yaml').deleteSync();
+      trees['web']!.$2(dir.path);
+      write(dir.path, 'android/app/src/main/res/values/strings.xml',
+          '<resources><string name="hi">Hi</string></resources>');
+      await initIn(dir.path, ['--stack', 'android']);
+      File('${dir.path}/AGENTS.md').deleteSync();
+      expect((await initIn(dir.path, []))['stack'], 'android');
+      expect(File('${dir.path}/AGENTS.md').readAsStringSync(),
+          contains(' stack=android '));
+    });
+
+    test('a config detection cannot place still names the stack', () async {
+      File('${dir.path}/pubspec.yaml').deleteSync();
+      write(dir.path, 'easyi18n.yaml', 'projectId: p1\nformat: xcstrings\n');
+      expect((await initIn(dir.path, []))['stack'], 'xcode');
+    });
+
+    test('a tree nothing detects, with no config, is still Flutter', () async {
+      File('${dir.path}/pubspec.yaml').deleteSync();
+      expect((await initIn(dir.path, []))['stack'], 'flutter');
+    });
+
+    for (final (what, bytes) in [
+      ('invalid YAML', utf8.encode('projectId: [\n')),
+      ('unreadable bytes', [0xff]),
+    ]) {
+      test('--force still rewrites a config with $what', () async {
+        File('${dir.path}/easyi18n.yaml').writeAsBytesSync(bytes);
+        await initIn(dir.path, ['--force']);
+        expect(File('${dir.path}/easyi18n.yaml').readAsStringSync(),
+            contains('\nprojectId: p1\n'));
+      });
+    }
+
+    test('init --help names the fallback instead of a flutter default', () {
+      final usage = runner.commands['init']!.usage;
+      expect(usage, isNot(contains('(defaults to "flutter")')));
+      expect(usage, contains('doctor'));
+      expect(usage, contains('else flutter'));
+    });
   });
 
   test('unreadable config is a nonretryable JSON error', () async {

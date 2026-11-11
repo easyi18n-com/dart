@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+The code is that of 1.0.0. pub.dev lists
+`https://github.com/easyi18n-com/dart`, which holds the source of the SDK
+and the CLI, as its repository and issue tracker.
+
 ## 1.0.0
 
 - `context.tr` called above the app's `Localizations`, as in the widget that

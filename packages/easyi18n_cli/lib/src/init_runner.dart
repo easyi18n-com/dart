@@ -22,21 +22,41 @@ class InitRunner {
     String? workspace, String? project, String? projectId, String? baseUrl,
     String? format, String? output, String? mode, String? catalog,
     bool force = false, bool writeAgents = true,
-    bool dryRun = false, String stack = defaultStack, bool forAgent = false,
+    bool dryRun = false, String? stack, bool forAgent = false,
     StackAdapter? adapter, Prompt? prompt, void Function(InitStep)? onStep,
-    String? refSource}) {
+    String? refSource, List<InitStep> before = const []}) {
     try {
-      return _InitRun(configPath: configPath, logger: logger,
+      return (_InitRun(configPath: configPath, logger: logger,
         workspace: workspace, project: project, projectId: projectId,
         baseUrl: baseUrl, format: format, output: output, mode: mode,
         catalog: catalog, force: force, writeAgents: writeAgents,
         dryRun: dryRun, prompt: prompt, refSource: refSource,
-        adapter: adapter ?? selectStackAdapter(p.dirname(configPath),
-            stack: stack, forAgent: forAgent),
-        onStep: onStep).run();
+        adapter: adapter ?? initAdapter(configPath, stack: stack, forAgent: forAgent),
+        onStep: onStep)..steps.addAll(before)).run();
     } on FileSystemException catch (e) {
       throw CliException('Cannot read or write ${e.path}: ${e.message}');
     }
+  }
+}
+
+/// The adapter `init` sets up with. No stack named: the one `doctor` grades,
+/// so its `easyi18n init` remedy writes what it checks (#2575).
+StackAdapter initAdapter(String configPath, {String? stack, bool forAgent = false}) {
+  final root = p.dirname(configPath);
+  return stack == null
+      ? adapterFor(root, _existingConfig(configPath))
+      : selectStackAdapter(root, stack: stack, forAgent: forAgent);
+}
+
+/// A missing config, or one that does not load, counts as absent: `--force`
+/// rewrites the latter unread, and without it `_ensureConfig` reports why.
+Easyi18nConfig? _existingConfig(String configPath) {
+  try {
+    return Easyi18nConfig.load(File(configPath));
+  } on CliException {
+    return null;
+  } on FileSystemException {
+    return null;
   }
 }
 
@@ -59,7 +79,7 @@ class _InitRun {
   final Prompt? prompt;
   final StackAdapter adapter;
   final void Function(InitStep)? _replay;
-  final _steps = <InitStep>[];
+  final steps = <InitStep>[];
   late final _context = InitContext(root: p.dirname(configPath), dryRun: dryRun,
       onStep: _onStep, ignoreDerivedState: _ignoreDerivedState);
   bool _ignoredDerivedState = false;
@@ -77,10 +97,10 @@ class _InitRun {
     }
     return InitReport(stack: adapter.stack, family: adapter.family,
       projectDir: p.normalize(p.absolute(root)), baseUrl: config.baseUrl,
-      dryRun: dryRun, next: adapter.nextCommand(config), steps: _steps);
+      dryRun: dryRun, next: adapter.nextCommand(config), steps: steps);
   }
 
-  void _onStep(InitStep step) { _steps.add(step); _replay?.call(step); }
+  void _onStep(InitStep step) { steps.add(step); _replay?.call(step); }
 
   /// Writes (or keeps) `easyi18n.yaml` and returns the effective config.
   Easyi18nConfig _ensureConfig(File file) {

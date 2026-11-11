@@ -15,6 +15,7 @@ import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 import 'support/agents_md.dart';
+import 'support/flutter_android.dart';
 
 /// The default for tests that are not about the completeness arm: every
 /// request fails, so the arm reports "could not verify" and nothing else in
@@ -56,7 +57,7 @@ name: demo_app
 dependencies:
   flutter:
     sdk: flutter
-  easyi18n: ^0.2.0
+  easyi18n: ^1.0.0
 
 flutter:
   assets:
@@ -255,7 +256,8 @@ $trCalls
     expect(findings.map((f) => f['check']), [
       'config', 'credential', 'agents_md', 'pubspec', 'pubspec',
       'entitlements',
-      'entitlements', 'scope', 'scope', 'app', 'scan', 'icu', 'delivery',
+      'entitlements', 'permissions', 'scope', 'scope', 'app', 'scan', 'icu',
+      'delivery',
       'delivery', 'assets', 'scan', 'scan', 'scan',
     ]);
     expect(findings.where((f) => f['check'] == 'delivery').map((f) => f['level']),
@@ -853,6 +855,16 @@ mode: a
       expect(out.toString(), contains('dashboard Settings'));
     });
 
+    test('an Android manifest without INTERNET is not read: Mode A ships no '
+        'runtime that fetches (#2340)', () async {
+      writeModeAFixture();
+      writeFlutterAndroid(dir.path);
+      final code = await runDoctor();
+      final o = out.toString();
+      expect(code, 0, reason: o);
+      expect(o, isNot(contains('android')));
+    });
+
     test('a Mode B config still runs the full runtime checks (regression '
         'guard)', () async {
       writeHealthyFixture();
@@ -1118,10 +1130,22 @@ void main() => runApp(Easyi18nScope(
       writeHealthyFixture();
       final pubspec = fileAt('pubspec.yaml').readAsStringSync();
       fileAt('pubspec.yaml').writeAsStringSync(
-          pubspec.replaceFirst('easyi18n: ^0.2.0', 'easyi18n: ^0.1.0'));
+          pubspec.replaceFirst('easyi18n: ^1.0.0', 'easyi18n: ^0.1.0'));
       final code = await runDoctor();
       expect(code, 1);
-      expect(out.toString(), contains('easyi18n ^0.1.0 excludes the SDK'));
+      expect(out.toString(), contains('easyi18n ^0.1.0 excludes the SDK '
+          "Easyi18nScope.localesOf needs (^1.0.0); run 'easyi18n init'"));
+    });
+
+    test('a ^0.2.x constraint init would raise still passes: it resolves the '
+        'SDK doctor checks for (#2526)', () async {
+      writeHealthyFixture();
+      final pubspec = fileAt('pubspec.yaml').readAsStringSync();
+      fileAt('pubspec.yaml').writeAsStringSync(
+          pubspec.replaceFirst('easyi18n: ^1.0.0', 'easyi18n: ^0.2.0'));
+      final code = await runDoctor();
+      expect(code, 0, reason: out.toString());
+      expect(out.toString(), contains('pubspec.yaml - easyi18n is a dependency'));
     });
 
     test('fails when the scope is not mounted anywhere', () async {
@@ -1148,14 +1172,120 @@ void main() => runApp(const MyApp());
     });
   });
 
+  // A release APK reaches delivery only when its manifest declares INTERNET,
+  // and `flutter create` declares it for debug and profile runs alone.
+  group('Android release permission (#2340)', () {
+    String at(String relative) => '${dir.path}/$relative';
+
+    test('a main manifest without it warns that a release build cannot reach '
+        'delivery, exit 0', () async {
+      writeHealthyFixture();
+      writeFlutterAndroid(dir.path);
+      final code = await runDoctor();
+      final o = out.toString();
+      expect(code, 0, reason: o);
+      expect(o, contains('warn  ${at(kMainManifest)} - android.permission.INTERNET '
+          'missing - a release build cannot reach delivery'));
+      expect(o, contains("run 'easyi18n init'"));
+      expect(o, isNot(contains('All checks passed.')));
+    });
+
+    test('the JSON verdict is warnings, not failed', () async {
+      writeHealthyFixture();
+      writeFlutterAndroid(dir.path);
+      final code = await runDoctor(json: true);
+      final report = jsonDecode(out.toString()) as Map<String, dynamic>;
+      expect(code, 0);
+      expect(report['verdict'], 'warnings');
+      final android = (report['findings'] as List)
+          .where((f) => f['check'] == 'permissions')
+          .toList();
+      expect(android, hasLength(1));
+      expect(android.single['level'], 'warn');
+      expect(android.single['subject'], at(kMainManifest));
+    });
+
+    test('a main manifest that declares it passes', () async {
+      writeHealthyFixture();
+      writeFlutterAndroid(dir.path, mainExtra: '    $kInternetLine\n');
+      final code = await runDoctor();
+      final o = out.toString();
+      expect(code, 0, reason: o);
+      expect(o, contains('ok    ${at(kMainManifest)} - '
+          'android.permission.INTERNET declared'));
+      expect(o, contains('All checks passed.'));
+    });
+
+    test('a declaration inside a comment does not count', () async {
+      writeHealthyFixture();
+      writeFlutterAndroid(dir.path, mainExtra: '    <!-- $kInternetLine -->\n');
+      await runDoctor();
+      expect(out.toString(), contains('warn  ${at(kMainManifest)} - '
+          'android.permission.INTERNET missing'));
+    });
+
+    test('the release source set declaring it passes', () async {
+      writeHealthyFixture();
+      writeFlutterAndroid(dir.path, release: '''
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    $kInternetLine
+</manifest>
+''');
+      final code = await runDoctor();
+      final o = out.toString();
+      expect(code, 0, reason: o);
+      expect(o, contains('ok    ${at(kReleaseManifest)} - '
+          'android.permission.INTERNET declared'));
+    });
+
+    test('a release manifest that removes what main declares warns, naming '
+        'it', () async {
+      writeHealthyFixture();
+      writeFlutterAndroid(dir.path, mainExtra: '    $kInternetLine\n', release: '''
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET"
+        tools:node="remove" />
+</manifest>
+''');
+      final code = await runDoctor();
+      final o = out.toString();
+      expect(code, 0, reason: o);
+      expect(o, contains('warn  ${at(kReleaseManifest)} - '
+          'android.permission.INTERNET removed'));
+      expect(o, isNot(contains('INTERNET declared')));
+    });
+
+    test('an unreadable manifest is unverified, not also missing', () async {
+      writeHealthyFixture();
+      writeFlutterAndroid(dir.path);
+      fileAt(kMainManifest).writeAsBytesSync([0xff, 0xfe, 0x3c]);
+      final code = await runDoctor();
+      final o = out.toString();
+      expect(code, 0, reason: o);
+      expect(o, contains('info  ${at(kMainManifest)} - could not verify'));
+      expect(o, isNot(contains('INTERNET missing')));
+    });
+
+    test('no Android target is reported, not warned', () async {
+      writeHealthyFixture();
+      final code = await runDoctor();
+      final o = out.toString();
+      expect(code, 0, reason: o);
+      expect(o, contains('info  android/ - no Android target'));
+      expect(o, contains('All checks passed.'));
+    });
+  });
+
   group('credential', () {
-    test('warns when EASYI18N_TOKEN is not set', () async {
+    test('warns when there is neither a login nor EASYI18N_TOKEN', () async {
       writeHealthyFixture();
       final code = await runDoctor(environment: const {});
       expect(code, 0);
       expect(
         out.toString(),
-        contains('warn  credential - EASYI18N_TOKEN not set'),
+        contains('warn  credential - not logged in and EASYI18N_TOKEN not set - '
+            "run 'easyi18n login'"),
       );
     });
   });

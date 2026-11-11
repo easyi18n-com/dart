@@ -48,6 +48,22 @@ class McpHarness {
     Map<String, Object?> arguments = const {},
   ]) => connection.callTool(CallToolRequest(name: name, arguments: arguments));
 
+  /// [call] with a `progressToken`, and what the server reported while it ran.
+  Future<({CallToolResult result, List<ProgressNotification> progress})>
+      callWithProgress(String name, Map<String, Object?> arguments,
+          String token) async {
+    final request = CallToolRequest(
+      name: name,
+      arguments: arguments,
+      meta: MetaWithProgressToken(progressToken: ProgressToken(token)),
+    );
+    final progress = <ProgressNotification>[];
+    final listening = connection.onProgress(request).listen(progress.add);
+    final result = await connection.callTool(request);
+    await listening.cancel();
+    return (result: result, progress: progress);
+  }
+
   Future<void> shutdown() async {
     await _client.shutdown();
     await server.shutdown();

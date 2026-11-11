@@ -27,7 +27,7 @@ class DoctorCommand extends Command<int> with JsonPresenter {
         help:
             'API key (eik_) with the read scope. Reads published coverage '
             'for Mode A and project languages for web projects. '
-            'Defaults to \$EASYI18N_TOKEN.',
+            'Defaults to \$EASYI18N_TOKEN, then your easyi18n login.',
       )
       ..addOption(
         'source-dir',

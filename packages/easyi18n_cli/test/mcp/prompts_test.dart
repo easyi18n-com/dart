@@ -155,9 +155,9 @@ void main() {
     for (final sentence in [
       'Web: a package.json that depends on @jsverse/transloco, '
           '@ngx-translate/core or i18next, with one JSON file per locale.',
-      'supported: Flutter, Xcode, web JSON catalogs, Android strings.xml;',
+      'web JSON catalogs, Android strings.xml;',
       'web, the ICU transpiler a step names, installed first with the '
-          "project's package manager.",
+          "project's package manager;",
       'Web: move user-facing literals into the base file (`source:` in '
           'easyi18n.yaml) as ICU',
       'Never edit the other locale files: pull writes them.',
@@ -240,6 +240,52 @@ void main() {
     expect(translate,
         contains('Mode A (.arb), Xcode and Android: rebuild to see the '
             'translations.'));
+  });
+
+  // On the prompt the client receives, for the reason given above. An
+  // Angular app's ids and tokens are what its translations survive or lose
+  // by, so the branch says where they come from (#2101).
+  test('setup and translate carry the Angular branch', () async {
+    final fixture = project();
+    addTearDown(() => fixture.dir.deleteSync(recursive: true));
+    final harness = await McpHarness.start(fixture.deps);
+    addTearDown(harness.shutdown);
+
+    Future<String> flat(String name) async => textOf(
+      await harness.getPrompt(name),
+    ).replaceAll(RegExp(r'\s+'), ' ');
+    final setup = await flat('setup');
+    for (final sentence in [
+      'Angular: a package.json that depends on @angular/localize plus an '
+          'angular.json.',
+      'supported: Flutter, Xcode, Angular i18n, web JSON catalogs, Android '
+          'strings.xml;',
+      // Wired before the first pull, the section breaks `ng build`: it
+      // reads every file it lists.
+      'Angular, the loading in src/main.ts, or the i18n section of '
+          'angular.json once pull has written the files it lists (ng build '
+          'fails while one is missing).',
+      'each with its own id (i18n="@@cart.title"): without one the id is a '
+          'digest of the text, and editing the text starts its translation '
+          'over.',
+      r'Keep every {$…} token as it is.',
+      'Then run ng extract-i18n --format=json with --output-path set to the '
+          'directory of `source:`.',
+    ]) {
+      expect(setup, contains(sentence));
+    }
+    final translate = await flat('translate');
+    for (final sentence in [
+      'Angular: run ng extract-i18n first (AGENTS.md has the command); '
+          r'protected_tokens are the {$…} tokens every translation keeps.',
+      'Angular: messages.<locale>.json per target language into `output:`; '
+          'messages.json is never rewritten.',
+      'Angular: rebuild with ng build --localize (add the i18n section init '
+          'printed to angular.json first if it is not there), or reload an '
+          'app that loads them at runtime.',
+    ]) {
+      expect(translate, contains(sentence));
+    }
   });
 
   test('translate is the spec section 5.3, character for character', () async {

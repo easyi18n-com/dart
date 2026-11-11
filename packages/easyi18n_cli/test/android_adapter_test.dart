@@ -127,7 +127,7 @@ void main() {
           throwsA(isA<CliException>()
               .having((e) => e.code, 'code', 'unsupported_stack')
               .having((e) => e.message, 'message',
-                  allOf(contains('Supported: flutter, xcode, web, android;'),
+                  allOf(contains('Supported: flutter, xcode, web, android, angular;'),
                       isNot(contains('Android'))))));
     });
   });

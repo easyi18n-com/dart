@@ -4,10 +4,13 @@ library;
 import 'dart:convert';
 
 import 'package:dart_mcp/client.dart';
+import 'package:easyi18n_cli/src/logger.dart';
+import 'package:easyi18n_cli/src/mcp/deps.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
+import '../support/stored_login.dart';
 import 'harness.dart';
 import 'server_test.dart' show errorOf, project;
 
@@ -18,8 +21,15 @@ void main() {
   late int estimateMc;
   late bool overCap;
   late Map<String, Object?> operation;
+  // The state each GET of the operation answers, in order; the last one
+  // repeats. Empty leaves `operation['state']` alone.
+  late List<String> states;
+  // What GET /v1/projects/{id}/credential says of a login (#2580 A3).
+  late bool loginAsks;
   setUp(() {
     requests = [];
+    states = [];
+    loginAsks = false;
     estimateMc = 42000;
     overCap = false;
     operation = {
@@ -55,6 +65,13 @@ void main() {
         'units': [],
       }), 200);
     }
+    if (req.url.path.endsWith('/credential')) {
+      return http.Response(jsonEncode({'scopes': ['read', 'translate', 'publish'],
+        'requires_operation_approval': loginAsks}), 200);
+    }
+    if (req.method == 'GET' && states.isNotEmpty) {
+      operation['state'] = states.length > 1 ? states.removeAt(0) : states.first;
+    }
     return http.Response(jsonEncode(operation), req.method == 'POST' ? 201 : 200);
   }
 
@@ -80,6 +97,51 @@ void main() {
 
   List<http.Request> posts() =>
       [for (final r in requests) if (r.url.path == '/v1/operations') r];
+
+  // Decision 1 of #2579: a login spends and publishes as its human, so
+  // authorize mints nothing for it and sends the agent to the action. The
+  // server says whether that login needs an approval after all: the flag
+  // that turns a login back into a key under D17 (agent-native D3).
+  group('with the stored login', () {
+    for (final (action, next) in [
+      ('translate', 'push'),
+      ('publish', 'publish'),
+      ('rollback', 'rollback'),
+    ]) {
+      test('$action mints no operation and sends the agent to $next',
+          () async {
+        final result = await call({
+          'action': action,
+          if (action == 'translate') 'max_credits': 51,
+        }, environment: loggedInHome());
+        expect(result.isError, isNot(true), reason: '${result.structuredContent}');
+        expect(result.structuredContent!['next'], next);
+        expect(result.structuredContent, isNot(contains('approval_url')));
+        expect(posts(), isEmpty);
+        expect((result.content.single as TextContent).text,
+            contains('Call $next without an operation_id'));
+      });
+    }
+
+    test('a login the server makes ask gets an operation, as a key does',
+        () async {
+      loginAsks = true;
+      final result = await call({'action': 'publish'},
+          environment: loggedInHome());
+      expect(posts(), hasLength(1));
+      expect(posts().single.headers['authorization'], 'Bearer eip_login');
+      expect(result.structuredContent!['approval_url'],
+          'https://app.easyi18n.com/approve/op_1');
+    });
+
+    test('a key in EASYI18N_TOKEN asks nothing about the login', () async {
+      final result = await call({'action': 'publish'},
+          environment: loggedInHome(also: {'EASYI18N_TOKEN': 'eik_test'}));
+      expect(posts(), hasLength(1));
+      expect(result.structuredContent!['approval_url'], isNotNull);
+      expect(requests.where((r) => r.url.path.endsWith('/credential')), isEmpty);
+    });
+  });
 
   test('neither action nor operation_id is refused before any request',
       () async {
@@ -269,6 +331,14 @@ void main() {
         'https://app.easyi18n.com/approve/op_1');
     expect(result.structuredContent!['next'], 'wait');
     expect(result.structuredContent!['ceiling'], {'env_max': 50});
+    // Codex ended its turn on the old «then call authorize … to see the
+    // approval» (#2446): the result says now, in this turn.
+    expect((result.content.single as TextContent).text, allOf(
+      contains('Give them the approval_url'),
+      contains('in this same turn'),
+    ));
+    expect([for (final r in requests) if (r.method == 'GET') r], isEmpty,
+        reason: 'the creation hands over the link at once, it never waits');
   });
 
   test('a server without batch hashes cannot be asked for an approval',
@@ -316,8 +386,8 @@ void main() {
       expect(result.structuredContent!['next'], 'push');
     });
 
-    test('a denied operation sends the agent back to authorize', () async {
-      operation['state'] = 'denied';
+    test('a used operation sends the agent back to authorize', () async {
+      operation['state'] = 'used';
       final result = await call({'action': 'translate', 'operation_id': 'op_1'});
       expect(result.structuredContent!['next'], 'authorize');
     });
@@ -338,6 +408,300 @@ void main() {
       expect(errorOf(result)['code'], 'operation_not_found');
       expect(errorOf(result)['statusCode'], 404);
       expect(requests.single.method, 'GET');
+    });
+  });
+
+  // #2446: no measured client turns a server notification into a new turn of
+  // the agent, so the human's answer has to reach a call that is still open.
+  group('a pending read waits for the human', () {
+    final start = DateTime.utc(2026, 10, 28, 12);
+    late DateTime now;
+    late List<Duration> slept;
+    late McpDeps deps;
+    setUp(() {
+      now = start;
+      slept = [];
+    });
+
+    Future<McpHarness> server({
+      Map<String, String> environment = const {'EASYI18N_TOKEN': 'eik_test'},
+    }) async {
+      final fixture = project(
+        environment: environment,
+        httpClient: MockClient(backend),
+        clock: () => now,
+        // A timer, not a microtask, so a wait that never ends fails the test
+        // instead of hanging the suite.
+        sleep: (d) async {
+          slept.add(d);
+          now = now.add(d);
+          if (slept.length > 200) throw StateError('the wait never ends');
+          await Future<void>.delayed(Duration.zero);
+        },
+      );
+      addTearDown(() => fixture.dir.deleteSync(recursive: true));
+      deps = fixture.deps;
+      final harness = await McpHarness.start(deps);
+      addTearDown(harness.shutdown);
+      return harness;
+    }
+
+    Future<CallToolResult> read(McpHarness harness) =>
+        harness.call('authorize', {'operation_id': 'op_1'});
+    String textOf(CallToolResult result) =>
+        (result.content.single as TextContent).text;
+    int reads() => [for (final r in requests) if (r.method == 'GET') r].length;
+    Duration waited() => slept.fold(Duration.zero, (a, b) => a + b);
+
+    test('a slow poll cannot extend the total wait deadline', () async {
+      final fixture = project(
+        environment: const {
+          'EASYI18N_TOKEN': 'eik_test',
+          'EASYI18N_MCP_APPROVAL_WAIT_SECONDS': '1',
+        },
+        httpClient: MockClient((request) async {
+          if (requests.isNotEmpty) {
+            await Future<void>.delayed(const Duration(seconds: 2));
+          }
+          return backend(request);
+        }),
+        sleep: (_) async {},
+      );
+      addTearDown(() => fixture.dir.deleteSync(recursive: true));
+      final harness = await McpHarness.start(fixture.deps);
+      addTearDown(harness.shutdown);
+      final watch = Stopwatch()..start();
+      final result = await read(harness);
+      expect(watch.elapsedMilliseconds, lessThan(1500));
+      expect(result.structuredContent!['next'], 'ask_human');
+    });
+
+    test('a slow initial read returns a retryable error within T', () async {
+      final fixture = project(
+        environment: const {
+          'EASYI18N_TOKEN': 'eik_test',
+          'EASYI18N_MCP_APPROVAL_WAIT_SECONDS': '1',
+        },
+        httpClient: MockClient((request) async {
+          await Future<void>.delayed(const Duration(seconds: 2));
+          return backend(request);
+        }),
+      );
+      addTearDown(() => fixture.dir.deleteSync(recursive: true));
+      final harness = await McpHarness.start(fixture.deps);
+      addTearDown(harness.shutdown);
+      final watch = Stopwatch()..start();
+      final result = await read(harness);
+      expect(watch.elapsedMilliseconds, lessThan(1500));
+      expect(errorOf(result)['code'], 'approval_read_timeout');
+      expect(errorOf(result)['retryable'], isTrue);
+      expect(result.structuredContent!.containsKey('state'), isFalse);
+    });
+
+    test('an operation read does not resolve an unused project handle', () async {
+      operation['state'] = 'approved';
+      final fixture = project(
+        config: 'workspace: example\nproject: app\n',
+        httpClient: MockClient((request) async {
+          expect(request.url.path, '/v1/operations/op_1');
+          return backend(request);
+        }),
+      );
+      addTearDown(() => fixture.dir.deleteSync(recursive: true));
+      final harness = await McpHarness.start(fixture.deps);
+      addTearDown(harness.shutdown);
+      expect((await read(harness)).structuredContent!['next'], 'push');
+      expect(reads(), 1);
+    });
+
+    test('the approval reaches the open call, with no call in between',
+        () async {
+      states = ['pending_approval', 'pending_approval', 'approved'];
+      final result = await read(await server());
+      expect(result.isError, isNot(true), reason: '${result.structuredContent}');
+      expect(result.structuredContent!['state'], 'approved');
+      expect(result.structuredContent!['next'], 'push');
+      expect(reads(), 3);
+      expect(slept, [const Duration(seconds: 5), const Duration(seconds: 5)]);
+    });
+
+    test('a denial reaches it with its own next, and nothing to report as '
+        'charged', () async {
+      states = ['pending_approval', 'denied'];
+      final result = await read(await server());
+      expect(result.structuredContent!['next'], 'stop');
+      expect(textOf(result), contains('denied'));
+      expect(textOf(result), isNot(contains('Report what it charged')));
+    });
+
+    test('an expiry gets a next apart from a denial', () async {
+      states = ['pending_approval', 'expired'];
+      final result = await read(await server());
+      expect(result.structuredContent!['next'], 'reauthorize');
+      expect(textOf(result), contains('expired'));
+      expect(textOf(result), isNot(contains('Report what it charged')));
+    });
+
+    test('a decided operation answers at once', () async {
+      states = ['approved'];
+      final result = await read(await server());
+      expect(result.structuredContent!['next'], 'push');
+      expect(reads(), 1);
+      expect(slept, isEmpty);
+    });
+
+    test('still pending, the call comes back with wait after 45 s, never '
+        'later', () async {
+      final result = await read(await server());
+      expect(result.structuredContent!['next'], 'wait');
+      expect(waited(), const Duration(seconds: 45));
+      expect(slept, everyElement(lessThanOrEqualTo(const Duration(seconds: 5))));
+      expect(reads(), 9);
+      expect(textOf(result), contains('again now, in this same turn'));
+      expect(textOf(result), isNot(contains('Give them the approval_url')),
+          reason: 'the human has the link already; the agent says it once');
+    });
+
+    test('ten minutes after this process first saw it, a read stops waiting '
+        'at once and says so', () async {
+      final harness = await server();
+      await read(harness);
+      now = start.add(const Duration(minutes: 10));
+      slept.clear();
+      requests.clear();
+      final result = await read(harness);
+      expect(result.structuredContent!['state'], 'pending_approval');
+      expect(result.structuredContent!['next'], 'ask_human');
+      expect(textOf(result), contains('Stop waiting'));
+      expect(slept, isEmpty);
+      expect(reads(), 1);
+      expect(posts(), isEmpty);
+    });
+
+    test('a read close to the ten minutes waits only what is left', () async {
+      final harness = await server();
+      await read(harness);
+      // 17 s left: not a multiple of the 5 s poll, so a last sleep that is
+      // not cut short shows.
+      now = start.add(const Duration(minutes: 9, seconds: 43));
+      slept.clear();
+      final result = await read(harness);
+      expect(result.structuredContent!['next'], 'ask_human');
+      expect(waited(), const Duration(seconds: 17));
+    });
+
+    test('the ten minutes count from the creation when this process made it',
+        () async {
+      final harness = await server();
+      await harness.call('authorize', {'action': 'publish'});
+      expect(posts(), hasLength(1));
+      now = start.add(const Duration(minutes: 10));
+      final result = await read(harness);
+      expect(result.structuredContent!['next'], 'ask_human');
+      expect(slept, isEmpty);
+    });
+
+    group('EASYI18N_MCP_APPROVAL_WAIT_SECONDS', () {
+      Future<McpHarness> withWait(String value) => server(environment: {
+            'EASYI18N_TOKEN': 'eik_test',
+            'EASYI18N_MCP_APPROVAL_WAIT_SECONDS': value,
+          });
+
+      test('shortens the ten minutes', () async {
+        final harness = await withWait('50');
+        expect((await read(harness)).structuredContent!['next'], 'wait');
+        slept.clear();
+        final result = await read(harness);
+        expect(result.structuredContent!['next'], 'ask_human');
+        expect(waited(), const Duration(seconds: 5));
+      });
+
+      for (final value in ['9999', '', 'soon', '-5']) {
+        test('"$value" leaves the ten minutes alone', () async {
+          final harness = await withWait(value);
+          await read(harness);
+          now = start.add(const Duration(minutes: 9, seconds: 50));
+          slept.clear();
+          final result = await read(harness);
+          expect(result.structuredContent!['next'], 'ask_human');
+          expect(waited(), const Duration(seconds: 10));
+        });
+      }
+    });
+
+    test('progress reaches the client every 10 s with its token', () async {
+      final harness = await server();
+      final call = await harness
+          .callWithProgress('authorize', {'operation_id': 'op_1'}, 'p1');
+      expect(call.result.structuredContent!['next'], 'wait');
+      expect([for (final n in call.progress) n.progressToken], List.filled(4, 'p1'));
+      expect([for (final n in call.progress) n.progress], [1, 2, 3, 4]);
+    });
+
+    // A progress notification may only name a token the client sent.
+    test('without a progressToken the wait sends none and still answers',
+        () async {
+      final harness = await server();
+      final sent = <ProgressNotification>[];
+      deps.notifyProgress = sent.add;
+      final result = await read(harness);
+      expect(result.isError, isNot(true), reason: '${result.structuredContent}');
+      expect(result.structuredContent!['next'], 'wait');
+      expect(sent, isEmpty);
+    });
+
+    // Measured on the binary: with stdin closed mid-wait the process lived
+    // 32 s more, until the 45 s ran out.
+    test('a closed channel ends the wait at the next poll', () async {
+      final harness = await server();
+      deps.connected = () => slept.length < 2;
+      final result = await read(harness);
+      expect(result.structuredContent!['next'], 'wait');
+      expect(slept, hasLength(2));
+      expect(reads(), 2);
+    });
+
+    test('an already closed channel does not sleep before returning', () async {
+      final harness = await server();
+      deps.connected = () => false;
+      await read(harness);
+      expect(slept, isEmpty);
+    });
+
+    test('the server ties connected to its channel', () async {
+      final harness = await server();
+      expect(deps.connected(), isTrue);
+      await harness.shutdown();
+      expect(deps.connected(), isFalse);
+    });
+
+    // Measured on the binary: left open, a keep-alive socket held the process
+    // 15 s past a closed stdin.
+    test('the read closes the client it opened', () async {
+      final client = _CountingClose(MockClient(backend));
+      final fixture = project(httpClient: client, clock: () => now,
+          sleep: (d) async {
+            now = now.add(d);
+            await Future<void>.delayed(Duration.zero);
+          });
+      addTearDown(() => fixture.dir.deleteSync(recursive: true));
+      final harness = await McpHarness.start(fixture.deps);
+      addTearDown(harness.shutdown);
+      expect((await read(harness)).structuredContent!['next'], 'wait');
+      expect(client.closed, 1);
+    });
+
+    // The suite injects both; the server a client starts waits on the wall.
+    test('the process defaults wait in real time', () async {
+      final process = McpDeps(
+        logger: CliLogger(out: StringBuffer(), err: StringBuffer()),
+        environment: const {},
+      );
+      expect(process.clock().difference(DateTime.now()).inSeconds.abs(),
+          lessThan(2));
+      final watch = Stopwatch()..start();
+      await process.sleep(const Duration(milliseconds: 200));
+      expect(watch.elapsedMilliseconds, greaterThanOrEqualTo(190));
     });
   });
 
@@ -490,4 +854,15 @@ void main() {
       expect(result.structuredContent!['ceiling'], {'env_max': 200});
     });
   });
+}
+
+class _CountingClose extends http.BaseClient {
+  _CountingClose(this._inner);
+  final http.Client _inner;
+  int closed = 0;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      _inner.send(request);
+  @override
+  void close() => closed++;
 }

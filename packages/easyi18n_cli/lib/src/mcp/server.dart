@@ -66,7 +66,11 @@ final class Easyi18nMcpServer extends MCPServer
            version: packageVersion,
          ),
          instructions: mcpInstructions,
-       );
+       ) {
+    deps
+      ..notifyProgress = notifyProgress
+      ..connected = () => isActive;
+  }
 
   final McpDeps deps;
   final List<McpTool> tools;

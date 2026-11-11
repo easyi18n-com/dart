@@ -23,7 +23,11 @@ dependencies:
 
     test('is idempotent for any dependency form', () {
       expect(
-        addRuntimeDependency('dependencies:\n  easyi18n: ^0.2.0\n'),
+        addRuntimeDependency('dependencies:\n  easyi18n: ^1.0.0\n'),
+        isNull,
+      );
+      expect(
+        addRuntimeDependency('dependencies:\n  easyi18n: ^1.4.2\n'),
         isNull,
       );
       expect(
@@ -38,22 +42,58 @@ dependencies:
       expect((doc['dependencies'] as Map)['easyi18n'], kRuntimeDependency);
     });
 
-    test('raises a ^0.1.x from an earlier init, and only that', () {
+    test('raises a ^0.1.x or ^0.2.x from an earlier init, and only those', () {
       const old = 'dependencies:\n  easyi18n: ^0.1.0\n  http: ^1.0.0\n';
       expect(staleRuntimeConstraint(old), '^0.1.0');
       final out = addRuntimeDependency(old)!;
       expect(out, 'dependencies:\n  easyi18n: $kRuntimeDependency\n  http: ^1.0.0\n');
       expect(staleRuntimeConstraint(out), isNull);
+      expect(
+        addRuntimeDependency('dependencies:\n  easyi18n: ^0.2.0\n'),
+        'dependencies:\n  easyi18n: ^1.0.0\n',
+      );
       expect(addRuntimeDependency('dependencies:\n  easyi18n: ^0.3.0\n'), isNull);
+      expect(addRuntimeDependency('dependencies:\n  easyi18n: ^0.20.0\n'), isNull);
+      // The raise rewrites the first matching line, so a ^0.20.0 above the
+      // dependencies one must not match.
+      expect(
+        addRuntimeDependency('dev_dependencies:\n  easyi18n: ^0.20.0\n'
+            'dependencies:\n  easyi18n: ^0.2.0\n'),
+        'dev_dependencies:\n  easyi18n: ^0.20.0\n'
+        'dependencies:\n  easyi18n: $kRuntimeDependency\n',
+      );
     });
 
-    test('raises a quoted or commented ^0.1.x too, keeping the comment', () {
+    test('a ^0.2.x is not stale: it resolves the SDK doctor checks for', () {
+      expect(staleRuntimeConstraint('dependencies:\n  easyi18n: ^0.2.0\n'), isNull);
+    });
+
+    test('outdated is the ^0.1.x or ^0.2.x an earlier init wrote', () {
+      String? outdated(String c) =>
+          outdatedRuntimeConstraint('dependencies:\n  easyi18n: $c\n');
+      expect(outdated('^0.1.1'), '^0.1.1');
+      expect(outdated('"^0.2.0"'), '^0.2.0');
+      expect(outdated('^0.20.0'), isNull);
+      expect(outdated('^0.3.0'), isNull);
+      expect(outdated(kRuntimeDependency), isNull);
+    });
+
+    test('raises a quoted or commented ^0.1.x or ^0.2.x too, keeping the '
+        'comment', () {
       expect(
         addRuntimeDependency('dependencies:\n  easyi18n: "^0.1.0"\n'),
         'dependencies:\n  easyi18n: $kRuntimeDependency\n',
       );
       expect(
         addRuntimeDependency('dependencies:\n  easyi18n: ^0.1.1 # pinned\n'),
+        'dependencies:\n  easyi18n: $kRuntimeDependency # pinned\n',
+      );
+      expect(
+        addRuntimeDependency('dependencies:\n  easyi18n: "^0.2.0"\n'),
+        'dependencies:\n  easyi18n: $kRuntimeDependency\n',
+      );
+      expect(
+        addRuntimeDependency('dependencies:\n  easyi18n: ^0.2.1 # pinned\n'),
         'dependencies:\n  easyi18n: $kRuntimeDependency # pinned\n',
       );
       // A flow mapping has no line to rewrite: left alone, never a crash.
@@ -141,6 +181,146 @@ dependencies:
 
     test('leaves a non-plist file alone', () {
       expect(patchEntitlements('not a plist'), isNull);
+    });
+  });
+
+  group('internetPermission / addInternetPermission (#2340)', () {
+    const created = '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<!-- <manifest> in a comment is not the root -->\n'
+        '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        '    package="com.example.app">\n'
+        '    <application android:label="app" />\n'
+        '</manifest>\n';
+    const line =
+        '<uses-permission android:name="$kInternetPermission" />';
+    const ns = 'http://schemas.android.com/apk/res/android';
+    const toolsNs = 'http://schemas.android.com/tools';
+
+    test('inserts the permission right after the <manifest> tag', () {
+      final out = addInternetPermission(created)!;
+      expect(out, contains('package="com.example.app">\n    $line\n'
+          '    <application'));
+      expect(out, startsWith(created.substring(0, created.indexOf('<manifest '))));
+      expect(internetPermission(out), InternetPermission.declared);
+      expect(addInternetPermission(out), isNull);
+    });
+
+    test('single quotes and other permissions read as written', () {
+      expect(internetPermission('<manifest>\n'
+          "<uses-permission android:name='$kInternetPermission'/>\n"
+          '</manifest>'), InternetPermission.declared);
+      expect(internetPermission('<manifest>\n'
+          '<uses-permission android:name="android.permission.CAMERA" />\n'
+          '</manifest>'), InternetPermission.missing);
+    });
+
+    test('a removal is neither a declaration nor something to patch', () {
+      const removes = '<manifest>\n'
+          '<uses-permission android:name="$kInternetPermission"\n'
+          '    tools:node="remove" />\n</manifest>';
+      expect(internetPermission(removes), InternetPermission.removed);
+      expect(addInternetPermission(removes), isNull);
+    });
+
+    test('leaves a file without a <manifest> element alone', () {
+      expect(addInternetPermission('<manifest android:x="y" />'), isNull);
+      expect(addInternetPermission('not a manifest'), isNull);
+    });
+
+    test('a quoted > does not end the manifest opening tag', () {
+      const input = '<manifest xmlns:android="http://schemas.android.com/apk/res/android" '
+          'xmlns:tools="http://schemas.android.com/tools" tools:ignore="x > y">'
+          '<application /></manifest>';
+      expect(addInternetPermission(input), input.replaceFirst(
+          '<application', '\n    $line<application'));
+    });
+
+    test('a quoted > before the permission name does not hide it', () {
+      expect(internetPermission('<manifest><uses-permission '
+          'tools:ignore="x > y" android:name="$kInternetPermission" />'
+          '</manifest>'), InternetPermission.declared);
+    });
+
+    test('attribute-like text inside a value does not declare a permission', () {
+      expect(internetPermission('<manifest><uses-permission '
+          "tools:ignore='android:name=\"$kInternetPermission\"' "
+          'android:name="android.permission.CAMERA" /></manifest>'),
+          InternetPermission.missing);
+    });
+
+    test('attribute-like text inside a value does not remove a permission', () {
+      expect(internetPermission('<manifest><uses-permission '
+          "tools:ignore='tools:node=\"remove\"' "
+          'android:name="$kInternetPermission" /></manifest>'),
+          InternetPermission.declared);
+    });
+
+    test('tag and attribute names must match exactly', () {
+      expect(addInternetPermission('<manifest-extra></manifest-extra>'), isNull);
+      expect(internetPermission('<uses-permission-extra '
+          'android:name="$kInternetPermission" />'), InternetPermission.missing);
+      expect(internetPermission('<uses-permission '
+          'notandroid:name="$kInternetPermission" />'), InternetPermission.missing);
+    });
+
+    test('single-quoted > stays inside its attribute', () {
+      const input = "<manifest xmlns:android='$ns' tools:ignore='x > y'></manifest>";
+      expect(addInternetPermission(input), input.replaceFirst(
+          '</manifest>', '\n    $line</manifest>'));
+    });
+
+    test('spaces around = do not hide a declaration from init', () {
+      const spaced = '<manifest>\n<uses-permission android:name =\n'
+          '    "$kInternetPermission" />\n</manifest>';
+      expect(internetPermission(spaced), InternetPermission.declared);
+      expect(addInternetPermission(spaced), isNull);
+    });
+
+    test('only tools:node="remove" removes the permission', () {
+      expect(internetPermission('<manifest><uses-permission '
+          'android:name="$kInternetPermission" tools:ignore="remove" />'
+          '</manifest>'), InternetPermission.declared);
+      const merged = '<manifest><uses-permission '
+          'android:name="$kInternetPermission" tools:node="merge" />'
+          '</manifest>';
+      expect(internetPermission(merged), InternetPermission.declared);
+      expect(addInternetPermission(merged), isNull);
+    });
+
+    test('the Android prefix is the one the root binds', () {
+      expect(internetPermission('<manifest xmlns:a="$ns"><uses-permission '
+          'a:name="$kInternetPermission" /></manifest>'),
+          InternetPermission.declared);
+    });
+
+    test('only an xmlns: attribute binds a prefix', () {
+      expect(internetPermission('<manifest tools:ignore="$ns" xmlns:android='
+          '"$ns"><uses-permission android:name="$kInternetPermission" />'
+          '</manifest>'), InternetPermission.declared);
+    });
+
+    test('the tools prefix is the one the root binds', () {
+      expect(internetPermission('<manifest xmlns:t="$toolsNs"><uses-permission '
+          'android:name="$kInternetPermission" t:node="remove" /></manifest>'),
+          InternetPermission.removed);
+    });
+
+    test('a <manifest> in a comment binds no prefix', () {
+      expect(internetPermission('<!-- <manifest xmlns:z="$ns"> -->'
+          '<manifest xmlns:android="$ns"><uses-permission '
+          'android:name="$kInternetPermission" /></manifest>'),
+          InternetPermission.declared);
+    });
+
+    test('the inserted line uses the prefix the root binds', () {
+      const input = '<manifest xmlns:a="$ns"><application /></manifest>';
+      expect(addInternetPermission(input), input.replaceFirst('<application',
+          '\n    <uses-permission a:name="$kInternetPermission" /><application'));
+    });
+
+    test('a root that binds no Android prefix is left alone', () {
+      expect(addInternetPermission('<manifest><application /></manifest>'),
+          isNull);
     });
   });
 

@@ -6,6 +6,7 @@ out|ok    <tmp>/pubspec.yaml - easyi18n is a dependency
 out|ok    <tmp>/pubspec.yaml - assets/easyi18n/ assets registered
 out|ok    <tmp>/macos/Runner/DebugProfile.entitlements - com.apple.security.network.client granted
 out|ok    <tmp>/macos/Runner/Release.entitlements - com.apple.security.network.client granted
+out|info  android/ - no Android target
 out|ok    <tmp>/lib/main.dart - Easyi18nScope mounted
 out|ok    <tmp>/lib/main.dart - Easyi18nScope sets its baseUrl
 out|ok    <tmp>/lib/main.dart - MaterialApp declares localizationsDelegates and supportedLocales

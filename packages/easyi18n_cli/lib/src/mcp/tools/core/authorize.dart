@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:dart_mcp/server.dart';
 
+import '../../../api_client.dart';
 import '../../../config.dart';
 import '../../../credits.dart';
 import '../../../push_runner.dart';
@@ -27,10 +29,14 @@ final authorizeTool = McpTool(
     name: 'authorize',
     description: 'Request a human approval: a translate (the next push or '
         'sync), '
-        'capped at max_credits, a publish, or a rollback. Returns an '
-        'approval_url for the human. With operation_id it only reads that '
-        'operation: that is how you wait for the approval. Never raise '
-        'max_credits on your own.',
+        'capped at max_credits, a publish, or a rollback. With a key in '
+        'EASYI18N_TOKEN it returns an approval_url for the human. With '
+        'operation_id it reads that operation and, while it is pending, '
+        'waits up to 45 s for the human\'s answer: call it again in the same '
+        'turn while next is wait. With the human\'s easyi18n login it '
+        'creates nothing and answers approval: not_needed with the tool to '
+        'call next, unless the server says that login needs an approval too. '
+        'Never raise max_credits on your own.',
     annotations: ToolAnnotations(idempotentHint: true, openWorldHint: true),
     inputSchema: toolSchema(
       properties: {
@@ -60,16 +66,16 @@ final authorizeTool = McpTool(
       final configPath = deps.configPathFor(stringArg(request, 'project_dir'));
       final config = Easyi18nConfig.load(File(configPath), logger: deps.logger);
       refuseUntrustedTarget(config.baseUrl, environment: deps.environment);
-      return withProject(
-        config: config,
-        token: deps.requireToken(scope: 'translate'),
-        logger: deps.logger,
-        apiClientFactory: deps.apiClientFactory,
-        body: (client, _) async => _operationResult(
-          await client.getOperation(operationId),
-          ingest: ingestOf(configPath, config, deps),
-        ),
+      final client = (deps.apiClientFactory ?? TranslationsApiClient.new)(
+        baseUrl: config.baseUrl,
+        token: deps.requireToken(config.baseUrl, scope: 'translate'),
       );
+      try {
+        return await _awaitDecision(request, deps, client, operationId,
+            ingest: ingestOf(configPath, config, deps));
+      } finally {
+        client.close();
+      }
     }
     final action = stringArg(request, 'action');
     if (action == null) {
@@ -95,6 +101,9 @@ final authorizeTool = McpTool(
     return withIngestPreview(request, deps, tool: 'authorize',
         body: (client, projectId, preview) async {
       final ingest = preview.ingest;
+      if (await _loginNeedsNone(deps, client, projectId)) {
+        return _noneNeeded(ingest);
+      }
       if (preview.overKeyCap) return planLimit(ingest);
       final estimate = preview.estimate;
       if (estimate == 0) {
@@ -149,7 +158,7 @@ final authorizeTool = McpTool(
           'payload_sha256': manifest.payloadSha256,
         },
       );
-      return _operationResult(operation, extra: {
+      return _operationResult(operation, deps, extra: {
         'estimated_credits': creditsOf(estimate),
         'max_credits': authorized,
         'ceiling': {'env_max': ceiling},
@@ -180,26 +189,130 @@ Future<CallToolResult> _authorizeVersionAction(
   refuseUntrustedTarget(config.baseUrl, environment: deps.environment);
   return withProject(
     config: config,
-    token: deps.requireToken(scope: 'publish'),
+    token: deps.requireToken(config.baseUrl, scope: 'publish'),
     logger: deps.logger,
     apiClientFactory: deps.apiClientFactory,
-    body: (client, projectId) async => _operationResult(
-      await client.createOperation(
-        action: action,
-        scope: action == 'publish'
-            ? publishScope(projectId, publishFilters(request, config))
-            : rollbackScope(projectId, rollbackTarget(request)),
-      ),
-    ),
+    body: (client, projectId) async =>
+        await _loginNeedsNone(deps, client, projectId)
+            ? _noneNeeded(action)
+            : _operationResult(
+                await client.createOperation(
+                  action: action,
+                  scope: action == 'publish'
+                      ? publishScope(projectId, publishFilters(request, config))
+                      : rollbackScope(projectId, rollbackTarget(request)),
+                ),
+                deps,
+              ),
   );
 }
 
+/// A login spends and publishes as its human (decision 1 of #2579) unless
+/// the server says it needs an approval after all: the flag that puts a login
+/// back under D17 (agent-native D3). Asked of the server so that day mints the
+/// operation the 403 sends the agent here for. A key never asks.
+Future<bool> _loginNeedsNone(McpDeps deps, TranslationsApiClient client,
+        String projectId) async =>
+    deps.usesLogin(client.baseUrl) &&
+    !(await client.fetchCredential(projectId: projectId))
+        .requiresOperationApproval;
+
+CallToolResult _noneNeeded(String next) => CallToolResult(
+  content: [
+    Content.text(
+      text: 'authorize: not needed. This MCP server uses the login of '
+          "'easyi18n login', which spends and publishes as its human without "
+          'an approval. Call $next without an operation_id.',
+    ),
+  ],
+  structuredContent: {'approval': 'not_needed', 'next': next},
+);
+
+/// Under the lowest tool timeout measured: 60 s in Cursor CLI and the MCP
+/// TypeScript SDK (#2446).
+const _waitPerCall = Duration(seconds: 45);
+
+/// T, fixed by Leo on 2026-10-28 (#2446).
+const _waitTotal = Duration(minutes: 10);
+const _pollEvery = Duration(seconds: 5);
+const _progressEvery = Duration(seconds: 10);
+
+/// EASYI18N_MCP_APPROVAL_WAIT_SECONDS can only shorten T, so a test of the
+/// give-up need not wait ten minutes.
+Duration _waitTotalIn(Map<String, String> environment) {
+  final seconds = int.tryParse(
+      environment['EASYI18N_MCP_APPROVAL_WAIT_SECONDS']?.trim() ?? '');
+  if (seconds == null || seconds < 0) return _waitTotal;
+  final asked = Duration(seconds: seconds);
+  return asked < _waitTotal ? asked : _waitTotal;
+}
+
+/// Reads [operationId] again every 5 s while it is pending, until the human
+/// answers, 45 s pass, or T since this process first saw it runs out. The
+/// answer reaches the agent only through a call still open: no measured
+/// client starts a turn on a server notification (#2446).
+Future<CallToolResult> _awaitDecision(
+  CallToolRequest request,
+  McpDeps deps,
+  TranslationsApiClient client,
+  String operationId, {
+  required String ingest,
+}) async {
+  final started = deps.clock();
+  final giveUpAt = deps.approvalSeen
+      .putIfAbsent(operationId, () => started)
+      .add(_waitTotalIn(deps.environment));
+  final callEnds = started.add(_waitPerCall);
+  final deadline = giveUpAt.isBefore(callEnds) ? giveUpAt : callEnds;
+  final token = request.meta?.progressToken;
+  var reported = 0;
+  final initialBudget = deadline.difference(started);
+  Map<String, Object?> operation;
+  try {
+    operation = await client.getOperation(operationId).timeout(
+        initialBudget > Duration.zero ? initialBudget : _waitPerCall);
+  } on TimeoutException {
+    return toolError('Could not read the approval in time. Retry authorize '
+        'with the same operation_id.', code: 'approval_read_timeout',
+        retryable: true);
+  }
+  while (operation['state'] == 'pending_approval') {
+    final left = deadline.difference(deps.clock());
+    // A client that closed stdin waits for the process to exit.
+    if (left <= Duration.zero || !deps.connected()) break;
+    await deps.sleep(left < _pollEvery ? left : _pollEvery);
+    final ticks = deps.clock().difference(started).inSeconds ~/
+        _progressEvery.inSeconds;
+    if (token != null && ticks > reported) {
+      reported = ticks;
+      deps.notifyProgress(ProgressNotification(
+        progressToken: token,
+        progress: reported,
+        message: 'Waiting for the human to approve or deny',
+      ));
+    }
+    final remaining = deadline.difference(deps.clock());
+    if (remaining <= Duration.zero || !deps.connected()) break;
+    operation = await client.getOperation(operationId).timeout(remaining,
+        onTimeout: () => operation);
+  }
+  return _operationResult(operation, deps,
+      ingest: ingest, read: true, waitOver: !deps.clock().isBefore(giveUpAt));
+}
+
+/// [read] is a call with operation_id; [waitOver], that T ran out on it.
 CallToolResult _operationResult(
-  Map<String, Object?> operation, {
+  Map<String, Object?> operation,
+  McpDeps deps, {
   Map<String, Object?> extra = const {},
   String ingest = 'push',
+  bool read = false,
+  bool waitOver = false,
 }) {
   final state = operation['state'];
+  if (state == 'pending_approval' && !read) {
+    deps.approvalSeen.putIfAbsent('${operation['operation_id']}', deps.clock);
+  }
   // The action picks a branch, it is never echoed: with operation_id alone
   // the tool knows only what the operation says it is.
   final approved = switch (operation['action']) {
@@ -208,8 +321,10 @@ CallToolResult _operationResult(
     _ => ingest,
   };
   final next = switch (state) {
-    'pending_approval' => 'wait',
+    'pending_approval' => waitOver ? 'ask_human' : 'wait',
     'approved' => approved,
+    'denied' => 'stop',
+    'expired' => 'reauthorize',
     _ => 'authorize',
   };
   return CallToolResult(
@@ -218,9 +333,21 @@ CallToolResult _operationResult(
         // Derived from `next`, never the server's `state`: a string the
         // server sent travels only in structuredContent (spec section 4.4).
         text: switch (next) {
+          'wait' when read => 'authorize: still waiting for the human. Call '
+              'authorize with this operation_id again now, in this same '
+              'turn, without repeating the approval_url.',
           'wait' => 'authorize: waiting for the human. Give them the '
               'approval_url from this result, then call authorize with this '
-              'operation_id to see the approval.',
+              'operation_id in this same turn: it waits up to 45 s for their '
+              'answer. Do not end your turn to wait.',
+          'ask_human' => 'authorize: the human has not answered, and the '
+              'wait is over. Stop waiting: tell them the approval_url stays '
+              'open until expires_at, and read this operation_id again when '
+              'they say they answered.',
+          'stop' => 'authorize: the human denied this operation, so nothing '
+              'was charged. Tell them, and authorize again only if they ask.',
+          'reauthorize' => 'authorize: this approval expired. Tell the human, '
+              'and authorize again only if they still want it.',
           'push' || 'sync' =>
             'authorize: approved. Call $next with this operation_id.',
           'publish' => 'authorize: approved. Call publish with this '

@@ -9,8 +9,8 @@ import 'logger.dart';
 import 'project_ref.dart';
 
 /// Project config read from `easyi18n.yaml` at the repo root. Holds everything
-/// `pull` needs except the credential - the token is never persisted to disk
-/// (it comes from `EASYI18N_TOKEN` or `--token`).
+/// `pull` needs except the credential, which never goes in this file (it
+/// comes from `--token`, `EASYI18N_TOKEN` or the login store).
 class Easyi18nConfig {
   Easyi18nConfig({
     required this.ref,
@@ -214,7 +214,7 @@ class Easyi18nConfig {
         : '# easyi18n CLI config (Mode B: runtime SDK, context.tr()).';
     return '''
 $headline
-# Docs: https://github.com/liontude/easyi18n-dart
+# Docs: https://github.com/easyi18n-com/dart
 
 # The project to pull translations for: the @handle/slug pair from your
 # dashboard URL (workspace + project), or an opaque projectId.

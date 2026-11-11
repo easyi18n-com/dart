@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:easyi18n_cli/easyi18n_cli.dart';
 import 'package:easyi18n_cli/src/api_client.dart';
+import 'package:easyi18n_cli/src/backoff.dart';
 import 'package:easyi18n_cli/src/config.dart';
 import 'package:easyi18n_cli/src/delivery.dart';
 import 'package:easyi18n_cli/src/exceptions.dart';
@@ -56,6 +57,65 @@ void main() {
     addTearDown(client.close);
     await expectLater(client.fetchManifest('p1'),
         throwsA(isA<TransientCliException>()));
+  });
+
+  // #2646: a refused certificate is a connection failure, not a crash. The
+  // text is the exception's own, on one line, so TLS reads apart from a port.
+  group('a TLS failure reads as a connection failure', () {
+    const refused = HandshakeException('Handshake error in client', OSError(
+        '\n\tCERTIFICATE_VERIFY_FAILED: application verification failure(handshake.cc:319)'));
+    const why = 'HandshakeException: Handshake error in client (OS Error: '
+        'CERTIFICATE_VERIFY_FAILED: application verification failure(handshake.cc:319))';
+    late int calls;
+    setUp(() => calls = 0);
+
+    TranslationsApiClient api(http.Client client) => TranslationsApiClient(
+        baseUrl: 'https://api.easyi18n.com', token: 'eik_secret',
+        httpClient: client, wait: (_) async {});
+    MockClient throwing(Object error) => MockClient((_) async {
+          calls++;
+          throw error;
+        });
+    Matcher unreachable(String origin) => throwsA(isA<TransientCliException>()
+        .having((e) => e.message, 'message', 'Could not reach $origin: $why'));
+
+    test('a GET is replayed like a dropped connection, then gives up', () async {
+      final client = api(throwing(refused));
+      addTearDown(client.close);
+      await expectLater(client.fetchMeta(projectId: 'p1'),
+          unreachable('https://api.easyi18n.com'));
+      expect(calls, kMaxApiAttempts);
+    });
+
+    test('a POST is not replayed', () async {
+      final client = api(throwing(refused));
+      addTearDown(client.close);
+      await expectLater(client.translate(projectId: 'p1', units: []),
+          unreachable('https://api.easyi18n.com'));
+      expect(calls, 1);
+    });
+
+    test('delivery', () async {
+      final client = DeliveryClient(baseUrl: 'https://delivery.easyi18n.com',
+          httpClient: throwing(refused));
+      addTearDown(client.close);
+      await expectLater(client.fetchManifest('p1'), unreachable('delivery.easyi18n.com'));
+    });
+
+    test('mid-body', () async {
+      final client = api(MockClient.streaming((_, _) async =>
+          http.StreamedResponse(Stream.error(refused), 200)));
+      addTearDown(client.close);
+      await expectLater(client.translate(projectId: 'p1', units: []),
+          unreachable('https://api.easyi18n.com'));
+    });
+
+    test('a bug of its own is not disguised as one', () async {
+      final client = api(throwing(StateError('bug')));
+      addTearDown(client.close);
+      await expectLater(client.translate(projectId: 'p1', units: []),
+          throwsA(isA<StateError>()));
+    });
   });
 
   test('missing config is not a retryable error', () {

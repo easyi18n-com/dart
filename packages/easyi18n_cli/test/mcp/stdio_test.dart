@@ -27,6 +27,32 @@ void main() {
   });
   tearDownAll(() => dir.deleteSync(recursive: true));
 
+  test('explicit agent key mode refuses missing keys before opening stdio', () async {
+    for (final token in [null, '  ', 'eik_YOUR_AGENT_KEY', 'eip_personal']) {
+      final process = await Process.start(Platform.resolvedExecutable,
+          [snapshot, 'mcp', '--require-agent-key'], includeParentEnvironment: false,
+          environment: {'HOME': dir.path, 'EASYI18N_TOKEN': ?token});
+      final out = utf8.decodeStream(process.stdout);
+      final err = utf8.decodeStream(process.stderr);
+      await process.stdin.close();
+      expect(await process.exitCode.timeout(const Duration(seconds: 10)), 1);
+      expect(await out, isEmpty);
+      expect(await err, contains('Set EASYI18N_TOKEN to an AI agent key'));
+    }
+  });
+
+  test('a bare `mcp` starts with no key, for the login of the keyless snippet', () async {
+    final process = await Process.start(Platform.resolvedExecutable, [snapshot, 'mcp'],
+        includeParentEnvironment: false, environment: {'HOME': dir.path});
+    addTearDown(process.kill);
+    process.stdin.writeln(jsonEncode({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+      'params': {'protocolVersion': '2025-06-18', 'capabilities': <String, Object?>{},
+        'clientInfo': {'name': 'probe', 'version': '1.0.0'}}}));
+    final first = await process.stdout.transform(utf8.decoder)
+        .transform(const LineSplitter()).first.timeout(const Duration(seconds: 60));
+    expect((jsonDecode(first) as Map)['id'], 1);
+  });
+
   test('every stdout line of `easyi18n mcp` is a JSON message', () async {
     // A free push reaches a real server over loopback: the one tool that
     // writes the lockfile and the request log has to keep stdout clean too.
@@ -243,7 +269,7 @@ class _McpProcess {
   static Future<_McpProcess> start(String snapshot, String cwd) async {
     final process = await Process.start(
       Platform.resolvedExecutable,
-      [snapshot, 'mcp'],
+      [snapshot, 'mcp', '--require-agent-key'],
       workingDirectory: cwd,
       environment: {'EASYI18N_TOKEN': 'eik_test'},
     );

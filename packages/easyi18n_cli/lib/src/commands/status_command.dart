@@ -23,7 +23,7 @@ class StatusCommand extends Command<int> with JsonPresenter {
       'token',
       help:
           'API key (eik_) with the read scope. '
-          'Defaults to \$EASYI18N_TOKEN.',
+          'Defaults to \$EASYI18N_TOKEN, then your easyi18n login.',
     );
   }
 
@@ -47,6 +47,7 @@ class StatusCommand extends Command<int> with JsonPresenter {
 
     final token = requireToken(
       token: argResults!['token'] as String?, environment: _environment,
+      baseUrl: config.baseUrl,
     );
     final result = await StatusRunner().run(
       config: config, configPath: configPath, token: token, logger: _logger,

@@ -14,9 +14,9 @@ final addLanguageTool = McpTool(
   Tool(
     name: 'add_language',
     description: 'Add a target language to the project, or revive one that '
-        'was removed. Needs a key with the write scope. Charges nothing; the '
-        'language is filled by the next push or sync unless fill_mode is '
-        'manual.',
+        "was removed. Needs the human's easyi18n login or a key with the "
+        'write scope in EASYI18N_TOKEN. Charges nothing; the language is '
+        'filled by the next push or sync unless fill_mode is manual.',
     annotations: ToolAnnotations(idempotentHint: true, openWorldHint: true),
     inputSchema: toolSchema(
       properties: {
@@ -40,7 +40,7 @@ final addLanguageTool = McpTool(
     final result = await LanguageAddRunner().run(
       config: config,
       configPath: configPath,
-      token: deps.requireToken(scope: 'write'),
+      token: deps.requireToken(config.baseUrl, scope: 'write'),
       logger: deps.logger,
       code: stringArg(request, 'code')!,
       fillMode: stringArg(request, 'fill_mode'),

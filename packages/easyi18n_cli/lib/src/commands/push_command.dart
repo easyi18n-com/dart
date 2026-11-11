@@ -16,6 +16,7 @@ import '../publish_runner.dart';
 import '../push_runner.dart';
 import '../resolve.dart';
 import '../security.dart';
+import '../session.dart';
 
 /// Builds the API client `push` talks to. Injected so tests can swap in a
 /// `MockClient`-backed instance.
@@ -58,7 +59,7 @@ class PushCommand extends Command<int> with JsonPresenter {
         help:
             'API key (eik_) with translate scope; --publish also needs publish. '
             'Mode A --publish needs read, plus write for format adoption. '
-            'Defaults to \$EASYI18N_TOKEN.',
+            'Defaults to \$EASYI18N_TOKEN, then your easyi18n login.',
       )
       ..addOption(
         'source-dir',
@@ -129,8 +130,6 @@ class PushCommand extends Command<int> with JsonPresenter {
 
   static const _runner = PushRunner();
   static const _publisher = PublishRunner();
-
-  static const String tokenEnvVar = 'EASYI18N_TOKEN';
 
   @override
   String get name => 'push';
@@ -221,17 +220,13 @@ class PushCommand extends Command<int> with JsonPresenter {
     }
 
     // ---- 2. resolve the credential ----
-    final token =
-        (results['token'] as String?)?.trim() ??
-        _environment[tokenEnvVar]?.trim();
-    if (token == null || token.isEmpty) {
-      throw CliException(
-        'No credential. Set $tokenEnvVar or pass --token.\n'
-        'Create an API key in your project settings with translate scope. '
-        '--publish also needs publish; in Mode A it needs read, '
-        'plus write when adopting a format.',
-      );
-    }
+    final token = requireCredential(
+      token: results['token'] as String?, environment: _environment,
+      baseUrl: config.baseUrl,
+      need: 'Create an API key in your project settings with translate scope. '
+          '--publish also needs publish; in Mode A it needs read, '
+          'plus write when adopting a format.',
+    );
 
     warnOnUntrustedTarget(config.baseUrl, _logger);
 

@@ -11,8 +11,9 @@ import '../delivery.dart' show DeliveryClientFactory;
 import '../exceptions.dart';
 import '../extract/tr_extractor.dart';
 import '../logger.dart';
+import '../login_store.dart';
 import '../security.dart';
-import '../session.dart' show readToken;
+import '../session.dart' show findCredential;
 
 /// Everything a tool needs from the process, injected so the suite can drive
 /// the server without a filesystem-rooted cwd or a real backend.
@@ -27,9 +28,15 @@ class McpDeps {
     // wired-ignore: test seam. Production takes the default (the process
     // cwd); the suite needs a project root without chdir'ing the test runner.
     String Function()? currentDirectory,
+    // wired-ignore: test seams. Production takes the wall clock and a real
+    // delay; the suite waits for an approval without waiting 45 s.
+    DateTime Function()? clock,
+    Future<void> Function(Duration)? sleep,
   }) : environment = environment ?? Platform.environment,
        configFileName = configFileName ?? Easyi18nConfig.fileName,
-       _currentDirectory = currentDirectory ?? (() => Directory.current.path);
+       _currentDirectory = currentDirectory ?? (() => Directory.current.path),
+       clock = clock ?? DateTime.now,
+       sleep = sleep ?? Future<void>.delayed;
 
   /// Never stdout: that is the JSON-RPC wire.
   final CliLogger logger;
@@ -41,6 +48,18 @@ class McpDeps {
   final DeliveryClientFactory? deliveryFactory;
   final TrExtractor? extractor;
   final String Function() _currentDirectory;
+  final DateTime Function() clock;
+  final Future<void> Function(Duration) sleep;
+
+  /// `notifications/progress` on the wire; the server connects it.
+  void Function(ProgressNotification) notifyProgress = (_) {};
+
+  /// False once the client closed the channel; the server connects it.
+  bool Function() connected = () => true;
+
+  /// When this process first saw each pending operation: the wait for its
+  /// approval is capped from there (#2446).
+  final Map<String, DateTime> approvalSeen = {};
 
   /// `project_dir` argument, then `EASYI18N_PROJECT_DIR`, then the process cwd.
   ///
@@ -63,20 +82,29 @@ class McpDeps {
     return p.normalize(_currentDirectory());
   }
 
-  /// The credential never travels as a tool argument (D3): it comes from the
-  /// client's own env block, so a missing one is a config fix for the human,
-  /// not something to ask the model for.
-  String requireToken({String scope = 'read'}) {
-    final token = readToken(environment: environment);
-    if (token == null || token.isEmpty) {
-      throw CliException(
-        'No credential. Set EASYI18N_TOKEN in this MCP server\'s env '
-        '(needs the $scope scope).',
-        code: 'no_credential',
-      );
-    }
-    return token;
+  /// What a call to [baseUrl] sends, as the CLI resolves it: EASYI18N_TOKEN,
+  /// then the login `easyi18n login` stored for that origin, read on every
+  /// call so a login in another terminal needs no restart (#2583). It never
+  /// travels as a tool argument (D3): a missing one is for the human to fix.
+  String requireToken(String baseUrl, {String scope = 'read'}) {
+    final found = findCredential(environment: environment, baseUrl: baseUrl);
+    if (found != null) return found.token;
+    final unreadable =
+        (LoginStore.locate(environment)?..read(baseUrl))?.unreadableNote ?? '';
+    throw CliException(
+      'No credential for $baseUrl$unreadable. Ask the human to run '
+      "'easyi18n login' in a terminal, or to set EASYI18N_TOKEN in this MCP "
+      "server's env (an API key with the $scope scope).",
+      code: 'no_credential',
+    );
   }
+
+  /// Whether a call to [baseUrl] sends the stored login rather than a key.
+  /// The login spends and publishes as its human (decision 1 of #2579); a key
+  /// in EASYI18N_TOKEN keeps D17. A blank one, or the placeholder of
+  /// `mcp config`, is unset, as in [findCredential].
+  bool usesLogin(String baseUrl) =>
+      findCredential(environment: environment, baseUrl: baseUrl)?.login != null;
 
   String configPathFor(String? fromRequest) =>
       p.isAbsolute(configFileName)
@@ -84,9 +112,11 @@ class McpDeps {
           : p.join(resolveProjectDir(fromRequest), configFileName);
 
   /// The project EASYI18N_TOKEN belongs to, asked of [baseUrl] only after D4
-  /// (#2445). Null from a backend that cannot name it.
+  /// (#2445). Null from a backend that cannot name it, and for a login, which
+  /// names no project: `GET /v1/credential` is for keys (#2580).
   Future<KeyProject?> keyProject(String baseUrl) async {
-    final token = requireToken();
+    final token = requireToken(baseUrl);
+    if (usesLogin(baseUrl)) return null;
     refuseUntrustedTarget(baseUrl, environment: environment);
     final client = (apiClientFactory ?? TranslationsApiClient.new)(
         baseUrl: baseUrl, token: token);

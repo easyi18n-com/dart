@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 
 import 'adapters/android_adapter.dart' show AndroidAdapter, kAndroidFormat;
+import 'adapters/angular_adapter.dart' show kAngularFormat;
 import 'api_client.dart';
 import 'backoff.dart';
 import 'catalog_layout.dart';
@@ -209,6 +210,13 @@ class SyncRunner {
     return SyncScan(file: file, path: path, perLocale: perLocale);
   }
 
+  /// How [inputParts] tells a one-file layout to take the other base files.
+  /// `doctor` repeats it apart: MCP clips a finding's message at 200
+  /// characters, and the refusal is longer.
+  static const oneCatalogRemedy = 'To sync them as one catalog, set '
+      '`sourceLayout: namespaces` (one file per namespace in sourceRoot) or '
+      '`sourceLayout: scopes` (source: plus one directory per scope).';
+
   /// The base-language files of the declared input tree, which is independent
   /// of download destinations: [source] alone, or every file a merged layout
   /// has a place for.
@@ -236,6 +244,10 @@ class SyncRunner {
         code: 'catalog_scope_unknown', details: {'source': sourceName,
           'fields': invalid, 'files': (observed.toList()..sort()).map(relative).toList()});
     final sourceFile = File(source).resolveSymbolicLinksSync();
+    // Angular's base file is `messages.json` and its translations
+    // `messages.<locale>.json`: the base name carries no language.
+    final baseName = config.format == kAngularFormat
+        ? foldLocale(p.basename(source)) : '${foldLocale(baseCode)}.json';
     final others = <String>{};
     var inputRoot = '';
     try {
@@ -259,7 +271,7 @@ class SyncRunner {
             if (!excludes(physical) && names.any((n) => n.endsWith('.json'))) {
               observed.add(physical);
               if (layout == 'base-tree' || layout == 'namespaces' ||
-                  names.contains('${foldLocale(baseCode)}.json')) {
+                  names.contains(baseName)) {
                 selected.add(physical);
               }
             }
@@ -294,10 +306,7 @@ class SyncRunner {
         '`source:` names $sourceName, and its language has '
         '${files.length} more file(s): ${files.join(', ')}. A sync uploads one '
         'file as the whole catalog of the project, so the keys of the others '
-        'would be disabled. To sync them as one catalog, set '
-        '`sourceLayout: namespaces` (one file per namespace in sourceRoot) or '
-        '`sourceLayout: scopes` (source: plus one directory per scope). '
-        'Nothing was uploaded.',
+        'would be disabled. $oneCatalogRemedy Nothing was uploaded.',
         code: 'several_files_per_locale',
         details: {'source': sourceName, 'files': files},
       );

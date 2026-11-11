@@ -305,6 +305,16 @@ void main() {
       expect(block, contains('`--no-publish`'));
       expect(parsers['sync']!.options, contains('no-publish'));
     });
+
+    // #2583: the human's credential is the login; a key in EASYI18N_TOKEN is
+    // the one a CI uses.
+    test('names the login before the key', () {
+      final block = renderAgentsBlock(configWith('projectId: p1\n'),
+          DartFlutterAdapter()).replaceAll(RegExp(r'\s+'), ' ');
+      expect(block, contains('`easyi18n login`'));
+      expect(block.indexOf('`easyi18n login`'),
+          lessThan(block.indexOf('`EASYI18N_TOKEN`')));
+    });
   });
 
   group('doctor agents_md', () {

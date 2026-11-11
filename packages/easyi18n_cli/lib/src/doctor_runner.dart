@@ -14,6 +14,7 @@ import 'doctor_report.dart';
 import 'exceptions.dart';
 import 'extract/tr_extractor.dart';
 import 'logger.dart';
+import 'login_store.dart' show LoginStore, StoredLogin;
 import 'output_format.dart';
 import 'resolve.dart';
 import 'security.dart';
@@ -72,6 +73,11 @@ class _DoctorRun {
   final _findings = <DoctorFinding>[];
   late final _checks = DoctorFindings(_addFinding);
 
+  /// A check that needs the API, without a credential.
+  String _noCredential(String does) =>
+      'not logged in and EASYI18N_TOKEN not set (a login or a key with the '
+      'read scope $does)';
+
   Future<DoctorReport> run({required String configPath,
       required String sourcePath, String? token,
       bool agentSession = false}) async {
@@ -84,7 +90,7 @@ class _DoctorRun {
     if (agentSession && !File(configPath).existsSync()) {
       _checks.fail('config', configPath,
           'no ${Easyi18nConfig.fileName} - call init to create it');
-      _checkCredential(token);
+      _checkCredential(token, Easyi18nConfig.originFrom(_environment));
       final adapter = _adapter ?? adapterFor(root, null,
           extractor: _extractor, deliveryFactory: _deliveryFactory);
       return DoctorReport(_findings,
@@ -102,8 +108,9 @@ class _DoctorRun {
     _checks.ok('config', configPath,
         'project ${config.describeRef}${modeA ? ' (Mode A: TMS)' : ''}');
 
-    _checkCredential(token);
-    if (agentSession) await _checkAgentKey(config, token);
+    final credential = _checkCredential(token, config.baseUrl);
+    token = credential?.token;
+    if (agentSession) await _checkAgentKey(config, credential);
     final adapter = _adapter ?? adapterFor(root, config,
         extractor: _extractor, deliveryFactory: _deliveryFactory);
     if (agentSession &&
@@ -132,13 +139,11 @@ class _DoctorRun {
   /// graded, it found something, or it could not look.
   Future<void> _gradeModeACompleteness(
     Easyi18nConfig config,
-    String? flagToken,
+    String? credential,
   ) async {
-    const tokenEnv = 'EASYI18N_TOKEN';
-    final token = readToken(token: flagToken, environment: _environment) ?? '';
+    final token = credential ?? '';
     if (token.isEmpty) {
-      _checks.unverified('completeness', 'completeness',
-          '$tokenEnv not set (a key with the read scope grades it)');
+      _checks.unverified('completeness', 'completeness', _noCredential('grades it'));
       return;
     }
     // This arm puts the bearer token on the wire,
@@ -248,12 +253,11 @@ class _DoctorRun {
   /// A per-locale project shows one file per language, and nothing on disk
   /// says whether those are the languages easyi18n translates.
   Future<void> _checkLanguages(WebAdapter adapter, String root,
-      Easyi18nConfig config, String? flagToken) async {
-    final token = readToken(token: flagToken, environment: _environment) ?? '';
+      Easyi18nConfig config, String? credential) async {
+    final token = credential ?? '';
     if (token.isEmpty) {
-      _checks.unverified('languages', 'languages', 'EASYI18N_TOKEN not set '
-          '(a key with the read scope compares the project languages with '
-          'the locale files)');
+      _checks.unverified('languages', 'languages', _noCredential(
+          'compares the project languages with the locale files'));
       return;
     }
     warnOnUntrustedTarget(config.baseUrl, _logger);
@@ -280,14 +284,16 @@ class _DoctorRun {
   }
 
   /// Only an Agent key makes every spend and publish wait for a human
-  /// approval (agent-native §6.2), and the agent is who holds the key. The CLI
-  /// doctor does not ask: a CI key is the other valid kind, and on Mode B that
-  /// doctor sends the token nowhere.
-  Future<void> _checkAgentKey(Easyi18nConfig config, String? flagToken) async {
-    final token = readToken(token: flagToken, environment: _environment) ?? '';
-    if (token.isEmpty) return;
+  /// approval (agent-native §6.2), and the agent is who holds the key. The
+  /// login spends as its human, which is what they chose (decision 1 of
+  /// #2579). The CLI doctor does not ask: a CI key is the other valid kind,
+  /// and on Mode B that doctor sends the token nowhere.
+  Future<void> _checkAgentKey(Easyi18nConfig config,
+      ({String token, StoredLogin? login})? credential) async {
+    if (credential == null) return;
     warnOnUntrustedTarget(config.baseUrl, _logger);
-    final client = _apiClientFactory(baseUrl: config.baseUrl, token: token);
+    final client =
+        _apiClientFactory(baseUrl: config.baseUrl, token: credential.token);
     try {
       final projectId = await resolveProjectId(config, client, logger: _logger);
       final key = await client.fetchCredential(projectId: projectId);
@@ -295,6 +301,9 @@ class _DoctorRun {
       if (key.requiresOperationApproval) {
         _checks.ok('agent_key', 'credential', 'Agent key ($scopes): every '
             'spend and publish waits for a human approval');
+      } else if (credential.login != null) {
+        _checks.ok('agent_key', 'credential', 'your login ($scopes): spends '
+            'and publishes as you, without a per-operation approval');
       } else {
         _checks.warn('agent_key', 'credential', 'not an Agent key: spends and '
             'publishes without a human approval ($scopes) - create one under '
@@ -312,8 +321,8 @@ class _DoctorRun {
 
   /// Asked where the loop ends in `pull`, and only of an agent: its key is
   /// the one that spends and publishes without being able to enable a format.
-  Future<void> _checkOutputFormat(Easyi18nConfig config, String? flagToken) async {
-    final token = readToken(token: flagToken, environment: _environment) ?? '';
+  Future<void> _checkOutputFormat(Easyi18nConfig config, String? credential) async {
+    final token = credential ?? '';
     if (token.isEmpty) return;
     warnOnUntrustedTarget(config.baseUrl, _logger);
     final client = _apiClientFactory(baseUrl: config.baseUrl, token: token);
@@ -338,15 +347,29 @@ class _DoctorRun {
 
   // ----- local checks --------------------------------------------------------
 
-  void _checkCredential(String? flagToken) {
-    final token = readToken(token: flagToken, environment: _environment);
-    if (token != null && token.isNotEmpty) {
+  /// What a call to [baseUrl] sends, as every command resolves it, named on
+  /// the `credential` line.
+  ({String token, StoredLogin? login})? _checkCredential(
+      String? token, String baseUrl) {
+    final found = findCredential(
+        token: token, environment: _environment, baseUrl: baseUrl);
+    final login = found?.login;
+    if (login != null) {
+      final who = login.email == null ? '' : ' as ${login.email}';
+      final until = login.expiresAt?.toIso8601String() ?? 'an unstated date';
+      login.expired
+          ? _checks.warn('credential', 'credential',
+              "the login$who expired on $until - run 'easyi18n login'")
+          : _checks.ok('credential', 'credential', 'logged in$who until $until');
+    } else if (found != null) {
       _checks.ok('credential', 'credential', 'EASYI18N_TOKEN set');
     } else {
+      final unreadable =
+          (LoginStore.locate(_environment)?..read(baseUrl))?.unreadableNote ?? '';
       _checks.warn('credential', 'credential',
-        "EASYI18N_TOKEN not set - 'easyi18n push/pull' will need it",
-      );
+          "not logged in$unreadable and EASYI18N_TOKEN not set - run 'easyi18n login'");
     }
+    return found;
   }
 
   void _addFinding(DoctorFinding finding) {

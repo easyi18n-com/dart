@@ -69,6 +69,23 @@ CallToolResult authorizationRequired(
   },
 );
 
+/// Why an ingest with no operation cannot go: a key needs one for any spend
+/// (D17), and the login, which spends as its human (decision 1 of #2579), is
+/// still held to the ceiling the human set (D7). Null when it can.
+CallToolResult? refuseUnauthorized(String ingest, int estimate, int ceiling,
+    {required bool login}) {
+  if (estimate <= 0) return null;
+  if (!login) return authorizationRequired(ingest, estimate);
+  if (estimate <= ceiling * kMillicreditsPerCredit) return null;
+  return toolError(
+    'This $ingest is estimated at ~${creditsOf(estimate)} credits, above the '
+    '$ceiling this MCP server allows (EASYI18N_MCP_MAX_CREDITS). Only the '
+    'human can raise it, in the MCP client config.',
+    code: 'above_ceiling',
+    extra: {'estimated_credits': creditsOf(estimate), 'env_max': ceiling},
+  );
+}
+
 /// The dry run says the plan refuses the keys this ingest would create. The
 /// server answers the real one with a 402 whatever is authorized, so this
 /// stops before an approval is asked for or an attempt is spent.

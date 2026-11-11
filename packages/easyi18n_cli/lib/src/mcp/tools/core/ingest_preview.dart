@@ -6,6 +6,7 @@ import 'package:dart_mcp/server.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../adapters/android_adapter.dart';
+import '../../../adapters/angular_adapter.dart' show angularMessages, kAngularFormat;
 import '../../../adapters/stack_adapters.dart';
 import '../../../api_client.dart';
 import '../../../config.dart';
@@ -73,13 +74,18 @@ class IngestPreview {
 /// The entries of the uploaded file as the server's parser of [format]
 /// counts them, from the same bytes decoded the same way: the `strings` of
 /// an `.xcstrings` catalog, the top-level strings of a `json` file and the
-/// leaves of a `nested_json` one, blank ones left out, and the resources of
-/// a `strings.xml` that `doctor` counts. The human reads the count on the
-/// approval screen, and the server refuses an operation that counts none.
+/// leaves of a `nested_json` one, blank ones left out, the ids under the
+/// `translations` of an Angular file, and the resources of a `strings.xml`
+/// that `doctor` counts. The human reads the count on the approval screen,
+/// and the server refuses an operation that counts none.
 int _catalogEntries(List<int> bytes, String? format) {
   final text = utf8.decode(bytes, allowMalformed: true);
   if (format == kAndroidFormat) return AndroidAdapter.translatableKeys(text) ?? 0;
   final doc = jsonDecode(text) as Map;
+  if (format == kAngularFormat) {
+    return (angularMessages(doc) ?? const {}).values
+        .where((text) => text.trim().isNotEmpty).length;
+  }
   if (format != 'json' && format != 'nested_json') {
     final strings = doc['strings'];
     return strings is Map ? strings.length : 0;

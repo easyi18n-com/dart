@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import '../version.dart';
 
+/// The npm wrapper of this CLI, as the registry and `npx` name it.
+const npmPackage = '@easyi18n.com/cli';
+
 /// How a client starts `easyi18n mcp`: the npm wrapper, which needs no Dart
 /// SDK (D11), or the package activated with `dart pub global activate`.
 ///
@@ -9,7 +12,7 @@ import '../version.dart';
 /// `cli-version` does: unpinned, it followed npm's `latest`, which can trail
 /// the binary that printed it (rc.1 under rc.4, #1930).
 enum McpRunner {
-  npx(['npx', '-y', '@easyi18n.com/cli@$packageVersion', 'mcp']),
+  npx(['npx', '-y', '$npmPackage@$packageVersion', 'mcp']),
   dart(['dart', 'pub', 'global', 'run', 'easyi18n_cli:easyi18n', 'mcp']);
 
   const McpRunner(this.argv);
@@ -26,9 +29,11 @@ const _projectDir = 'EASYI18N_PROJECT_DIR';
 /// into chats and docs, so `mcp config` does not read `EASYI18N_TOKEN` at all.
 const keyPlaceholder = 'eik_YOUR_AGENT_KEY';
 
-/// One MCP client and the snippet that registers the server in it (D9). A
-/// file that lives in the repo (Cursor, VS Code, Gemini) reads the key through
-/// the client's own interpolation, so committing it commits no key.
+/// One MCP client and the snippet that registers the server in it (D9). By
+/// default the snippet carries no key: the server sends this machine's
+/// `easyi18n login` (#2584). With `agentKey` it carries an AI agent key, and a
+/// file that lives in the repo (Cursor, VS Code, Gemini) reads that key
+/// through the client's own interpolation, so committing it commits no key.
 enum McpClient {
   claudeCode(
     'claude-code',
@@ -49,29 +54,29 @@ enum McpClient {
     'cursor',
     'Cursor',
     'json',
-    'Merge it into .cursor/mcp.json in the project. Cursor reads '
-        'EASYI18N_TOKEN from the environment it was started in.',
+    'Merge it into .cursor/mcp.json in the project.',
+    keyNote: 'Cursor reads EASYI18N_TOKEN from the environment it was started in.',
   ),
   vscode(
     'vscode',
     'VS Code',
     'json',
-    'Merge it into .vscode/mcp.json in the project. VS Code asks for the key '
-        'once and stores it.',
+    'Merge it into .vscode/mcp.json in the project.',
+    keyNote: 'VS Code asks for the key once and stores it.',
   ),
   codex(
     'codex',
     'Codex CLI',
     'toml',
-    'Append it to ~/.codex/config.toml. Codex forwards EASYI18N_TOKEN from '
-        'the shell it runs in.',
+    'Append it to ~/.codex/config.toml.',
+    keyNote: 'Codex forwards EASYI18N_TOKEN from the shell it runs in.',
   ),
   gemini(
     'gemini',
     'Gemini CLI',
     'json',
-    'Merge it into .gemini/settings.json in the project. Gemini CLI reads '
-        'EASYI18N_TOKEN from the shell it runs in.',
+    'Merge it into .gemini/settings.json in the project.',
+    keyNote: 'Gemini CLI reads EASYI18N_TOKEN from the shell it runs in.',
   ),
   windsurf(
     'windsurf',
@@ -88,7 +93,8 @@ enum McpClient {
         'shape.',
   );
 
-  const McpClient(this.id, this.label, this.format, this.target);
+  const McpClient(this.id, this.label, this.format, this._where, {String? keyNote})
+      : _keyNote = keyNote;
 
   /// The `--client` value.
   final String id;
@@ -97,34 +103,39 @@ enum McpClient {
   /// `json`, `toml` or `shell`.
   final String format;
 
-  /// Where the snippet goes, for a human.
-  final String target;
+  final String _where;
+  final String? _keyNote;
 
-  String snippet(McpRunner runner) {
+  /// Where the snippet goes, for a human, and with an agent key where the
+  /// client reads it from.
+  String target({bool agentKey = false}) =>
+      agentKey && _keyNote != null ? '$_where $_keyNote' : _where;
+
+  String snippet(McpRunner runner, {bool agentKey = false}) {
     final command = runner.argv.first;
-    final args = runner.argv.sublist(1);
+    final args = [...runner.argv.skip(1), if (agentKey) '--require-agent-key'];
     Map<String, Object?> entry(Map<String, String> env) => {
       'command': command,
       'args': args,
-      'env': env,
+      if (env.isNotEmpty) 'env': env,
     };
-    const literal = {_token: keyPlaceholder};
+    Map<String, String> key(String value) => agentKey ? {_token: value} : const {};
     return switch (this) {
       claudeCode =>
-        'claude mcp add --env $_token=$keyPlaceholder '
-            '--transport stdio $_server -- ${runner.argv.join(' ')}',
+        'claude mcp add ${agentKey ? '--env $_token=$keyPlaceholder ' : ''}'
+            '--transport stdio $_server -- ${[command, ...args].join(' ')}',
       codex => [
         '[mcp_servers.$_server]',
         'command = ${jsonEncode(command)}',
         'args = [${args.map(jsonEncode).join(', ')}]',
-        'env_vars = ["$_token"]',
+        if (agentKey) 'env_vars = ["$_token"]',
         // Codex gives a server 10 s to start; a cold `npx` took 19.9 s.
         'startup_timeout_sec = 60',
         'required = true',
         'omit_tools_from = ["deferred"]',
       ].join('\n'),
       vscode => _json({
-        'inputs': [
+        if (agentKey) 'inputs': [
           {
             'type': 'promptString',
             'id': 'easyi18n-token',
@@ -136,7 +147,7 @@ enum McpClient {
           _server: {
             'type': 'stdio',
             ...entry({
-              _token: r'${input:easyi18n-token}',
+              ...key(r'${input:easyi18n-token}'),
               _projectDir: r'${workspaceFolder}',
             }),
           },
@@ -145,21 +156,21 @@ enum McpClient {
       cursor => _json({
         'mcpServers': {
           _server: entry({
-            _token: '\${env:$_token}',
+            ...key('\${env:$_token}'),
             _projectDir: r'${workspaceFolder}',
           }),
         },
       }),
       gemini => _json({
         'mcpServers': {
-          _server: entry({_token: '\$$_token'}),
+          _server: entry(key('\$$_token')),
         },
       }),
       zed => _json({
-        'context_servers': {_server: entry(literal)},
+        'context_servers': {_server: entry(key(keyPlaceholder))},
       }),
       claudeDesktop || windsurf || generic => _json({
-        'mcpServers': {_server: entry(literal)},
+        'mcpServers': {_server: entry(key(keyPlaceholder))},
       }),
     };
   }

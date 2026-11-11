@@ -54,7 +54,7 @@ Future<CallToolResult> withPushPreview(
     );
   }
   refuseUntrustedTarget(config.baseUrl, environment: deps.environment);
-  final token = deps.requireToken(scope: 'translate');
+  final token = deps.requireToken(config.baseUrl, scope: 'translate');
   const runner = PushRunner();
   final scan = runner.scan(
     deps.extractor ?? TrExtractor(),

@@ -4,11 +4,13 @@ import 'package:args/command_runner.dart';
 import 'package:dart_mcp/stdio.dart';
 
 import '../cli_output.dart';
+import '../exceptions.dart';
 import '../extract/tr_extractor.dart';
 import '../logger.dart';
 import '../mcp/client_config.dart';
 import '../mcp/deps.dart';
 import '../mcp/server.dart';
+import '../session.dart' show findCredential;
 import 'pull_command.dart' show ApiClientFactory;
 
 /// `easyi18n mcp` — the stdio MCP server (D1, D2).
@@ -26,6 +28,8 @@ class McpCommand extends Command<int> {
   }) : _apiClientFactory = apiClientFactory,
        _extractor = extractor,
        _environment = environment ?? Platform.environment {
+    argParser.addFlag('require-agent-key', negatable: false,
+        help: 'Require an API key in EASYI18N_TOKEN and disable personal login.');
     addSubcommand(McpConfigCommand(output: output));
   }
 
@@ -46,7 +50,14 @@ class McpCommand extends Command<int> {
 
   /// Runs the server. The runner calls this for a bare `easyi18n mcp`: with a
   /// subcommand registered, `package:args` refuses to run the parent itself.
-  Future<int> serve({required String configPath}) async {
+  Future<int> serve({required String configPath, required bool requireAgentKey}) async {
+    if (requireAgentKey) {
+      final key = findCredential(environment: _environment, baseUrl: null)?.token;
+      if (key == null || !key.startsWith('eik_')) {
+        throw CliException('Set EASYI18N_TOKEN to an AI agent key before starting the MCP server.',
+            code: 'agent_key_required');
+      }
+    }
     final server = Easyi18nMcpServer.fromStreamChannel(
       stdioChannel(input: stdin, output: stdout),
       deps: McpDeps(
@@ -84,6 +95,13 @@ class McpConfigCommand extends Command<int> with JsonPresenter {
               'The package activated with '
               '`dart pub global activate easyi18n_cli`.',
         },
+      )
+      ..addFlag(
+        'agent-key',
+        negatable: false,
+        help: 'Have the server send an AI agent key (eik_), for CI or an agent '
+            'whose spending waits for approval. Left out, it sends your '
+            'easyi18n login.',
       );
   }
 
@@ -102,18 +120,25 @@ class McpConfigCommand extends Command<int> with JsonPresenter {
     if (id == null) usageException('--client is required.');
     final client = McpClient.values.firstWhere((c) => c.id == id);
     final runner = McpRunner.values.byName(argResults!.option('runner')!);
-    final snippet = client.snippet(runner);
+    final agentKey = argResults!.flag('agent-key');
+    final snippet = client.snippet(runner, agentKey: agentKey);
+    final target = client.target(agentKey: agentKey);
     if (output.json) {
       output.emit({
         'client': client.id,
         'runner': runner.name,
         'format': client.format,
-        'target': client.target,
+        'target': target,
         'snippet': snippet,
+        'agent_key': agentKey,
       });
       return 0;
     }
-    output.logger.err.writeln(client.target);
+    output.logger.err.writeln(target);
+    if (!agentKey) {
+      output.logger.err.writeln("The server sends this machine's easyi18n login. "
+          'For CI, or an agent whose spending waits for approval, pass --agent-key.');
+    }
     output.logger.info(snippet);
     return 0;
   }

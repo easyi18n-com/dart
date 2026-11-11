@@ -11,6 +11,7 @@ import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import '../support/stored_login.dart';
 import 'harness.dart';
 import 'server_test.dart' show errorOf, project;
 
@@ -596,6 +597,43 @@ void main() {
     expect(requests.where((r) => r.url.path.startsWith('/v1/operations')),
         isEmpty);
     expect(lockfile().existsSync(), isFalse);
+  });
+
+  // Decision 1 of #2579: the MCP that inherits the login spends as its human,
+  // with no operation; the ceiling the human set (D7) still stops it.
+  group('with the stored login', () {
+    test('a billable push goes without operation_id, as the login', () async {
+      final result = await call({}, units: 1, environment: loggedInHome());
+      expect(result.isError, isNot(true), reason: '${result.structuredContent}');
+      final sent = realPushes().single;
+      expect(sent.headers['authorization'], 'Bearer eip_login');
+      expect(bodyOf(sent), isNot(contains('operationId')));
+      expect(requests.where((r) => r.url.path.startsWith('/v1/operations')),
+          isEmpty);
+      expect(result.structuredContent!['operation'], isNull);
+      expect(lockfile().existsSync(), isTrue);
+    });
+
+    test('an estimate above EASYI18N_MCP_MAX_CREDITS is above_ceiling and '
+        'ingests nothing', () async {
+      final result = await call({}, units: 1, environment: loggedInHome(
+          also: {'EASYI18N_MCP_MAX_CREDITS': '41'}));
+      expect(errorOf(result)['code'], 'above_ceiling');
+      expect(errorOf(result)['estimated_credits'], 42);
+      expect(errorOf(result)['env_max'], 41);
+      expect(realPushes(), isEmpty);
+      expect(lockfile().existsSync(), isFalse);
+      final at = await call({}, units: 1, environment: loggedInHome(
+          also: {'EASYI18N_MCP_MAX_CREDITS': '42'}));
+      expect(at.isError, isNot(true), reason: 'the ceiling is inclusive');
+    });
+
+    test('a key in EASYI18N_TOKEN keeps D17 over the login', () async {
+      final result = await call({}, units: 1,
+          environment: loggedInHome(also: {'EASYI18N_TOKEN': 'eik_test'}));
+      expect(errorOf(result)['code'], 'authorization_required');
+      expect(realPushes(), isEmpty);
+    });
   });
 
   // A payable pair can appear between the dry run and the real POST: the

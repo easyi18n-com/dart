@@ -85,7 +85,7 @@ final pullTool = McpTool(
     final runner = PullRunner(deps.logger);
     final outcome = await withProject(
       config: config,
-      token: deps.requireToken(),
+      token: deps.requireToken(config.baseUrl),
       logger: deps.logger,
       apiClientFactory: deps.apiClientFactory,
       body: (client, projectId) => runner.pullOnceDetailed(

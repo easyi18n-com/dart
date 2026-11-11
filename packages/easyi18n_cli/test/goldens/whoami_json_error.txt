@@ -1,0 +1,2 @@
+exit|1
+out|{"logged_in":false,"email":null,"base_url":"http://localhost:8080","expires_at":null,"uses_env_token":false,"valid":null,"workspaces":null,"error":{"message":"Not logged in to http://localhost:8080. Run 'easyi18n login'.","code":"not_logged_in","statusCode":null,"retryable":false}}

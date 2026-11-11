@@ -33,7 +33,7 @@ class FormatsAddCommand extends Command<int> with JsonPresenter {
   }) : _apiClientFactory = apiClientFactory,
        _environment = environment ?? Platform.environment {
     argParser.addOption('token', help: 'API key (eik_) with the write scope. '
-      'Defaults to \$EASYI18N_TOKEN.');
+      'Defaults to \$EASYI18N_TOKEN, then your easyi18n login.');
   }
 
   final CliOutput output;
@@ -56,7 +56,7 @@ class FormatsAddCommand extends Command<int> with JsonPresenter {
     final configPath = globalResults?['config'] as String? ?? Easyi18nConfig.fileName;
     final config = Easyi18nConfig.load(File(configPath), logger: output.logger);
     final token = requireToken(token: argResults!['token'] as String?,
-      environment: _environment, scope: 'write');
+      environment: _environment, scope: 'write', baseUrl: config.baseUrl);
     final result = await OutputFormatRunner().run(
       config: config, configPath: configPath, token: token, logger: output.logger,
       format: rest.single, apiClientFactory: _apiClientFactory,

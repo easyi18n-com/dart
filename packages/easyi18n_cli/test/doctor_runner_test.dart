@@ -330,4 +330,129 @@ baseUrl: https://untrusted.example
           path.endsWith('/meta') || path.endsWith('/credential')), isEmpty);
     });
   });
+
+  // #2583: doctor resolves the credential the other commands send, and says
+  // which one it is; since the series' PR 2 the MCP doctor does too.
+  group('a stored login', () {
+    late Directory home;
+    setUp(() {
+      home = Directory('${dir.path}/home');
+      (File('${home.path}/.config/easyi18n/credentials.json')
+            ..createSync(recursive: true))
+          .writeAsStringSync(jsonEncode({'version': 1, 'logins': {
+            'https://untrusted.example': {'token': 'eip_stored',
+              'email': 'dev@acme.test', 'expires_at': '2100-01-01T00:00:00.000Z'},
+            'https://elsewhere.example': {'token': 'eip_expired',
+              'email': 'old@acme.test', 'expires_at': '2000-01-01T00:00:00.000Z'},
+          }}));
+    });
+
+    Future<(DoctorReport, List<String>)> doctor(
+        {Map<String, String> env = const {}, bool agent = false}) async {
+      final tokens = <String>[];
+      final report = await DoctorRunner().run(configPath: config, logger: _Logger(),
+        environment: {'HOME': home.path, ...env}, agentSession: agent,
+        apiClientFactory: ({required baseUrl, required token}) {
+          tokens.add(token);
+          return TranslationsApiClient(baseUrl: baseUrl, token: token,
+              httpClient: _Client((_) async => http.Response('{}', 503)),
+              wait: (_) async {});
+        });
+      return (report, tokens);
+    }
+
+    DoctorFinding credentialOf(DoctorReport r) =>
+        r.findings.singleWhere((f) => f.check == 'credential');
+
+    test('a login file it cannot read is named, never printed', () async {
+      File('${home.path}/.config/easyi18n/credentials.json')
+          .writeAsStringSync('{"logins": "eip_secret"');
+      final credential = credentialOf((await doctor()).$1);
+      expect(credential.message, 'not logged in '
+          '(${home.path}/.config/easyi18n/credentials.json is not a login file this '
+          "CLI can read) and EASYI18N_TOKEN not set - run 'easyi18n login'");
+    });
+
+    test('names the login, its email and expiry, and grades with it', () async {
+      final (report, tokens) = await doctor();
+      final credential = credentialOf(report);
+      expect(credential.level, 'ok');
+      expect(credential.message,
+          'logged in as dev@acme.test until 2100-01-01T00:00:00.000Z');
+      expect(tokens, isNotEmpty);
+      expect(tokens.toSet(), {'eip_stored'});
+    });
+
+    test('a login past its date warns with the remedy', () async {
+      File(config).writeAsStringSync(
+          'workspace: acme\nproject: app\nmode: a\nbaseUrl: https://elsewhere.example\n');
+      final credential = credentialOf((await doctor()).$1);
+      expect(credential.level, 'warn');
+      expect(credential.message, 'the login as old@acme.test expired on '
+          "2000-01-01T00:00:00.000Z - run 'easyi18n login'");
+    });
+
+    test('EASYI18N_TOKEN wins and is the one named', () async {
+      final (report, tokens) = await doctor(env: {'EASYI18N_TOKEN': 'eik_env'});
+      expect(credentialOf(report).message, 'EASYI18N_TOKEN set');
+      expect(tokens.toSet(), {'eik_env'});
+    });
+
+    // The checks that need the API name the login too, in the CLI and the MCP.
+    test('without a credential the CLI and the MCP name the login', () async {
+      File(config).writeAsStringSync('projectId: p1\nmode: a\n'
+          'baseUrl: https://nologin.example\nformat: json\n'
+          'output: public/i18n\nsource: public/i18n/en.json\n');
+      File('${dir.path}/package.json')
+          .writeAsStringSync('{"dependencies": {"i18next": "^26.0.0"}}');
+      File('${dir.path}/public/i18n/en.json')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('{}');
+      String said(DoctorReport r, String check) =>
+          r.findings.singleWhere((f) => f.check == check).message;
+      final (cli, _) = await doctor();
+      expect(said(cli, 'completeness'), 'not logged in and EASYI18N_TOKEN not set '
+          '(a login or a key with the read scope grades it)');
+      expect(said(cli, 'languages'), 'not logged in and EASYI18N_TOKEN not set '
+          '(a login or a key with the read scope compares the project languages '
+          'with the locale files)');
+      final (agent, _) = await doctor(agent: true);
+      for (final check in ['completeness', 'languages', 'credential']) {
+        expect(said(agent, check), said(cli, check), reason: check);
+      }
+    });
+
+    test('the MCP doctor names and sends the stored login', () async {
+      final (report, tokens) = await doctor(agent: true);
+      expect(credentialOf(report).message,
+          'logged in as dev@acme.test until 2100-01-01T00:00:00.000Z');
+      expect(tokens, isNotEmpty);
+      expect(tokens.toSet(), {'eip_stored'});
+    });
+
+    // An agent calls doctor before init (#2445): with no easyi18n.yaml the
+    // line names what the next call to the default origin would send.
+    group('the MCP doctor without a config', () {
+      Future<DoctorFinding> credential(Map<String, String> env) async {
+        final report = await DoctorRunner().run(
+            configPath: '${dir.path}/missing/easyi18n.yaml', logger: _Logger(),
+            environment: {'HOME': home.path, ...env}, agentSession: true);
+        return credentialOf(report);
+      }
+
+      test('reads EASYI18N_TOKEN', () async {
+        final found = await credential({'EASYI18N_TOKEN': 'eik_test'});
+        expect(found.level, 'ok');
+        expect(found.message, 'EASYI18N_TOKEN set');
+      });
+
+      test('names the login stored for the origin it would call', () async {
+        final found = await credential(
+            {'EASYI18N_BASE_URL': 'https://untrusted.example'});
+        expect(found.level, 'ok');
+        expect(found.message,
+            'logged in as dev@acme.test until 2100-01-01T00:00:00.000Z');
+      });
+    });
+  });
 }

@@ -11,6 +11,7 @@ import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import '../support/stored_login.dart';
 import 'harness.dart';
 import 'server_test.dart' show errorOf, project;
 
@@ -171,10 +172,12 @@ void main() {
   Future<McpHarness> start({
     String config = _config,
     Map<String, String> files = const {'Localizable.xcstrings': _catalog},
+    Map<String, String> environment = const {'EASYI18N_TOKEN': 'eik_test'},
   }) async {
     final fixture = project(
       config: config,
       files: files,
+      environment: environment,
       httpClient: MockClient(backend),
     );
     dir = fixture.dir;
@@ -864,10 +867,12 @@ void main() {
       Map<String, Object?> arguments, {
       Map<String, String> extraFiles = const {},
       String config = _config,
+      Map<String, String> environment = const {'EASYI18N_TOKEN': 'eik_test'},
     }) async {
       final harness = await start(
         config: config,
         files: {'Localizable.xcstrings': _catalog, ...extraFiles},
+        environment: environment,
       );
       return harness.call('sync', arguments);
     }
@@ -1013,6 +1018,35 @@ void main() {
         requests.where((r) => r.url.path.startsWith('/v1/operations')),
         isEmpty,
       );
+    });
+
+    // Decision 1 of #2579, as for push: the login syncs as its human, under
+    // the ceiling the human set (D7).
+    test('with the stored login a billable sync goes without operation_id',
+        () async {
+      final result = await sync({}, environment: loggedInHome());
+      expect(result.isError, isNot(true), reason: '${result.structuredContent}');
+      final sent = realSyncs().single;
+      expect(sent.headers['authorization'], 'Bearer eip_login');
+      expect(bodyOf(sent), isNot(contains('operationId')));
+      expect(requests.where((r) => r.url.path.startsWith('/v1/operations')),
+          isEmpty);
+    });
+
+    test('with the stored login an estimate above the ceiling is '
+        'above_ceiling and syncs nothing', () async {
+      final result = await sync({}, environment: loggedInHome(
+          also: {'EASYI18N_MCP_MAX_CREDITS': '41'}));
+      expect(errorOf(result)['code'], 'above_ceiling');
+      expect(errorOf(result)['estimated_credits'], 42);
+      expect(realSyncs(), isEmpty);
+    });
+
+    test('a key in EASYI18N_TOKEN keeps D17 over the stored login', () async {
+      final result = await sync({},
+          environment: loggedInHome(also: {'EASYI18N_TOKEN': 'eik_test'}));
+      expect(errorOf(result)['code'], 'authorization_required');
+      expect(realSyncs(), isEmpty);
     });
 
     test('a 403 authorization_required on the real sync hands the estimate '

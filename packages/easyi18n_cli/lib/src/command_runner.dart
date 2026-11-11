@@ -10,6 +10,7 @@ import 'commands/extract_command.dart';
 import 'commands/formats_command.dart';
 import 'commands/init_command.dart';
 import 'commands/languages_command.dart';
+import 'commands/login_command.dart';
 import 'commands/mcp_command.dart';
 import 'commands/pull_command.dart' as pull;
 import 'commands/push_command.dart';
@@ -62,7 +63,8 @@ class Easyi18nCommandRunner extends CommandRunner<int> {
       negatable: false,
       help: 'Emit structured JSON output when supported by the command.',
     );
-    addCommand(InitCommand(output: output));
+    addCommand(InitCommand(output: output,
+      apiClientFactory: apiClientFactory, environment: environment));
     addCommand(FormatsCommand(output: output,
       apiClientFactory: apiClientFactory, environment: environment));
     addCommand(LanguagesCommand(output: output,
@@ -84,6 +86,12 @@ class Easyi18nCommandRunner extends CommandRunner<int> {
       apiClientFactory: apiClientFactory, environment: environment));
     addCommand(McpCommand(output: output, apiClientFactory: apiClientFactory,
       extractor: extractor, environment: environment));
+    addCommand(LoginCommand(output: output,
+      apiClientFactory: apiClientFactory, environment: environment));
+    addCommand(LogoutCommand(output: output,
+      apiClientFactory: apiClientFactory, environment: environment));
+    addCommand(WhoamiCommand(output: output,
+      apiClientFactory: apiClientFactory, environment: environment));
   }
 
   final CliOutput output;
@@ -158,7 +166,8 @@ class Easyi18nCommandRunner extends CommandRunner<int> {
       // subcommand: it is a bare `easyi18n mcp`, which is what clients launch.
       if (command is McpCommand && results.rest.isEmpty) {
         return await command.serve(
-            configPath: topLevelResults.option('config')!);
+            configPath: topLevelResults.option('config')!,
+            requireAgentKey: results.flag('require-agent-key'));
       }
       return await super.runCommand(topLevelResults);
     } on CliException catch (error) {

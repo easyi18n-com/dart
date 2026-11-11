@@ -38,11 +38,45 @@ void main() {
     expect(actual, file.readAsStringSync());
   });
 
+  // #2648: the login spends and publishes without an operation, a key in
+  // EASYI18N_TOKEN does not, and an agent may read only the description. Each
+  // one routes through authorize's answer, as rule 1 does, so a login the
+  // server puts back under D17 still gets its approval_url.
+  test('the descriptions name both credentials', () {
+    final byName = {for (final tool in mcpTools) tool.name: tool.tool};
+    String flat(String? text) => (text ?? '').replaceAll(RegExp(r'\s+'), ' ');
+    for (final name in ['push', 'sync', 'publish', 'rollback', 'authorize',
+        'add_language', 'status']) {
+      final description = flat(byName[name]!.description);
+      expect(description, contains('easyi18n login'), reason: name);
+      expect(description, contains('EASYI18N_TOKEN'), reason: name);
+    }
+    for (final name in ['push', 'sync', 'publish', 'rollback']) {
+      expect(flat(byName[name]!.description),
+          contains('when it answers that none is needed'), reason: name);
+      final operationId = byName[name]!.inputSchema.properties!['operation_id'];
+      expect(flat(operationId!.description),
+          contains('unless authorize answered that none is needed'),
+          reason: '$name operation_id');
+    }
+  });
+
   test('every tool closes its input schema', () {
     for (final tool in mcpTools) {
       expect(tool.tool.inputSchema.additionalProperties, isFalse,
           reason: '${tool.name} would silently accept a `token` argument');
     }
+  });
+
+  // #2583: the login spends without an approval, so rule 1 stops promising
+  // one for every spend and rule 4 sends the human to `easyi18n login`. Both
+  // sit before the byte a truncating client cuts at.
+  test('the safety rules name the login', () {
+    final safety = mcpInstructions
+        .substring(0, mcpInstructions.indexOf('Mental model'))
+        .replaceAll(RegExp(r'\s+'), ' ');
+    expect(safety, contains('`easyi18n login` in a terminal'));
+    expect(safety, contains('Logged in, authorize says none is needed'));
   });
 
   test('instructions fit the budget and name every registered tool', () {
@@ -54,8 +88,8 @@ void main() {
     // Every file-first adapter is named where a client reads before any
     // prompt.
     expect(mcpInstructions.replaceAll(RegExp(r'\s+'), ' '),
-        contains('Xcode .xcstrings, web JSON per locale, Android strings.xml '
-            '(file-first)'));
+        contains('Xcode .xcstrings, web and Angular JSON per locale, Android '
+            'strings.xml (file-first)'));
     // The `Tools:` sentence, split into whole words — not `contains` over the
     // whole text. The prose already says `pull` (3 times), `apply` (2) and
     // `status` (6), so a substring check stays green for exactly the names a

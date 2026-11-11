@@ -17,8 +17,9 @@ final statusTool = McpTool(
     name: 'status',
     description: 'Compare the published version with the last pull, and list '
         'the project languages and their fill modes. With no easyi18n.yaml it '
-        'answers initialized: false, the project of EASYI18N_TOKEN and next: '
-        'init.',
+        'answers initialized: false and next: init, with the project of the '
+        "key in EASYI18N_TOKEN; with the human's easyi18n login it names no "
+        'project.',
     annotations: ToolAnnotations(
       readOnlyHint: true, idempotentHint: true, openWorldHint: true,
     ),
@@ -32,7 +33,7 @@ final statusTool = McpTool(
     final result = await StatusRunner().run(
       config: config,
       configPath: configPath,
-      token: deps.requireToken(),
+      token: deps.requireToken(config.baseUrl),
       logger: deps.logger,
       apiClientFactory: deps.apiClientFactory,
     );

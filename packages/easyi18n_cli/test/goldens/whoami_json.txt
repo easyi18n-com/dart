@@ -1,0 +1,2 @@
+exit|0
+out|{"logged_in":true,"email":"me@acme.test","base_url":"http://localhost:8080","expires_at":"2100-01-01T00:00:00.000Z","uses_env_token":false,"valid":true,"workspaces":[{"id":"w_acme","workspace":"acme","name":"Acme","plan":"pro","role":"owner","projects":[{"id":"p_app","workspace_id":"w_acme","workspace":"acme","slug":"app","name":"App","base_code":"en","role":"editor"}]},{"id":"personal_u1","name":"Personal","plan":"free","role":"owner","projects":[{"id":"p_side","workspace_id":"personal_u1","slug":"side","name":"Side","base_code":"fr","role":"owner"}]}]}

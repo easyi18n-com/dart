@@ -17,6 +17,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import '../support/agents_md.dart';
+import '../support/stored_login.dart';
 import 'harness.dart';
 
 /// A project on disk plus the deps a tool needs to reach it.
@@ -26,6 +27,8 @@ import 'harness.dart';
   Map<String, String> files = const {},
   Map<String, String> environment = const {'EASYI18N_TOKEN': 'eik_test'},
   http.Client? httpClient,
+  DateTime Function()? clock,
+  Future<void> Function(Duration)? sleep,
 }) {
   final dir = Directory.systemTemp.createTempSync('mcp_project');
   if (config != null) {
@@ -47,12 +50,16 @@ import 'harness.dart';
           : ({required baseUrl, required token}) => TranslationsApiClient(
                 baseUrl: baseUrl, token: token, httpClient: httpClient,
               ),
+      clock: clock,
+      sleep: sleep,
     ),
   );
 }
 
-Map<String, Object?> errorOf(CallToolResult result) =>
-    (result.structuredContent!['error'] as Map).cast<String, Object?>();
+Map<String, Object?> errorOf(CallToolResult result) {
+  expect(result.isError, isTrue);
+  return (result.structuredContent!['error'] as Map).cast<String, Object?>();
+}
 
 /// The MCP `init` refusal of a tree no stack detects, spelled out because the
 /// sentence is the contract an agent acts on (#2470). The lists sit inside
@@ -62,7 +69,7 @@ String agentRefusal(String finding) => '$finding. If the app is in a '
     'subdirectory, call init again with project_dir set to it. Otherwise do '
     'not add dependencies or files to make init accept this repository, and '
     'tell the human: "easyi18n does not support this repository yet. '
-    'Supported: flutter, xcode, web, android; roadmap: web t() extraction, '
+    'Supported: flutter, xcode, web, android, angular; roadmap: web t() extraction, '
     'gettext."';
 
 void main() {
@@ -103,8 +110,11 @@ void main() {
     final summaries = <String>[];
     setUp(summaries.clear);
     Future<List<Map<String, Object?>>> findings(http.Response Function() reply,
-        {List<String>? paths}) async {
-      final fixture = project(httpClient: MockClient((request) async {
+        {List<String>? paths,
+        Map<String, String> environment = const {'EASYI18N_TOKEN': 'eik_test'},
+        String check = 'agent_key'}) async {
+      final fixture = project(environment: environment,
+          httpClient: MockClient((request) async {
         paths?.add(request.url.path);
         return reply();
       }));
@@ -116,7 +126,7 @@ void main() {
       summaries.add((result.content.first as TextContent).text);
       return [
         for (final f in result.structuredContent!['findings'] as List)
-          if ((f as Map)['check'] == 'agent_key') f.cast<String, Object?>(),
+          if ((f as Map)['check'] == check) f.cast<String, Object?>(),
       ];
     }
 
@@ -159,6 +169,26 @@ void main() {
       // The `credential` warning is there, and it is not the one named.
       expect((result.content.first as TextContent).text,
           allOf(contains('1 warning(s)'), isNot(contains('agent_key'))));
+    });
+
+    // Decision 1 of #2579: the login is not a key that forgot its flag. It
+    // spends as its human, which is what the human chose (#2583, duda 11).
+    test('the stored login passes, named as the human it spends as', () async {
+      final environment = loggedInHome();
+      final found = await findings(() => key(false), environment: environment);
+      expect(found.single['level'], 'ok');
+      expect(found.single['message'], contains('your login'));
+      expect(found.single['message'], isNot(contains('not an Agent key')));
+      expect(summaries.single, isNot(contains('agent_key')));
+      final credential = await findings(() => key(false),
+          environment: environment, check: 'credential');
+      expect(credential.single['message'],
+          'logged in as dev@acme.test until 2099-01-01T00:00:00.000Z');
+    });
+
+    test('a login the server makes ask passes as an Agent key does', () async {
+      final found = await findings(() => key(true), environment: loggedInHome());
+      expect(found.single['message'], contains('every spend and publish waits'));
     });
 
     test('an Agent key passes', () async {
@@ -207,6 +237,29 @@ void main() {
     expect(result.isError, isTrue);
     expect(errorOf(result)['code'], 'no_credential');
     expect(errorOf(result)['retryable'], isFalse);
+  });
+
+  // #2646: a refused certificate answered `internal_error`, "See the server log".
+  test('a TLS failure is a retryable connection error, as a server down is',
+      () async {
+    final fixture = project();
+    addTearDown(() => fixture.dir.deleteSync(recursive: true));
+    final harness = await McpHarness.start(McpDeps(
+      logger: CliLogger(out: StringBuffer(), err: StringBuffer()),
+      environment: const {'EASYI18N_TOKEN': 'eik_test'},
+      currentDirectory: () => fixture.dir.path,
+      apiClientFactory: ({required baseUrl, required token}) => TranslationsApiClient(
+          baseUrl: baseUrl, token: token, wait: (_) async {},
+          httpClient: MockClient((_) async =>
+              throw const HandshakeException('Handshake error in client'))),
+    ));
+    addTearDown(harness.shutdown);
+
+    final error = errorOf(await harness.call('status'));
+    expect(error['code'], 'cli_error');
+    expect(error['retryable'], isTrue);
+    expect(error['message'], startsWith('Could not reach https://api.easyi18n.com: '
+        'HandshakeException: Handshake error in client'));
   });
 
   test('extract diffs sources against the lockfile', () async {
@@ -655,14 +708,14 @@ void main() {
       final error = errorOf(result);
       expect(error['code'], 'unsupported_stack');
       expect(error['retryable'], isFalse);
-      expect(error['supported'], ['flutter', 'xcode', 'web', 'android']);
+      expect(error['supported'], ['flutter', 'xcode', 'web', 'android', 'angular']);
       expect(error['roadmap'], isList);
       final roadmap = (error['roadmap'] as List).cast<String>();
       // One entry per stack: a list holding the whole sentence fragment is
       // non-empty too, and an agent cannot enumerate it.
       expect(roadmap.length, greaterThan(1));
       expect(roadmap, everyElement(isNot(contains(','))));
-      const sentence = 'Supported: flutter, xcode, web, android; roadmap: ';
+      const sentence = 'Supported: flutter, xcode, web, android, angular; roadmap: ';
       expect(error['message'], contains('$sentence${roadmap.join(', ')}.'));
       expect((result.content.single as TextContent).text, error['message']);
     });
@@ -1048,6 +1101,33 @@ void main() {
       expect(doctor.result.isError, isNot(true));
       expect(doctor.result.structuredContent!['stack'], 'flutter',
           reason: 'with no config and nothing detected, the default stack');
+    });
+
+    // #2583 (duda 4): the login goes back only to the origin that approved
+    // it, so a config naming another one, loopback included, finds none.
+    test('a login stored for another origin is never sent', () async {
+      final (:result, dir: _, :requests) = await call('status', {},
+          config: 'projectId: p1\nbaseUrl: http://localhost:9001\n',
+          environment: loggedInHome());
+      expect(requests, isEmpty);
+      expect(errorOf(result)['code'], 'no_credential');
+      expect(errorOf(result)['message'],
+          startsWith('No credential for http://localhost:9001.'));
+    });
+
+    // #2583 (duda 10): a login names no project, so status asks the server
+    // nothing; init lists where the login works (#2584, init_login_test).
+    test('with the stored login status asks nothing', () async {
+      final status = await call('status', {}, environment: loggedInHome());
+      expect(status.result.isError, isNot(true),
+          reason: '${status.result.structuredContent}');
+      expect(status.result.structuredContent, {
+        'initialized': false,
+        'next': 'init',
+        'project_dir': p.normalize(status.dir.absolute.path),
+        'base_url': Easyi18nConfig.defaultBaseUrl,
+      });
+      expect(status.requests, isEmpty);
     });
 
     test('without a token status and init say no_credential and write nothing',

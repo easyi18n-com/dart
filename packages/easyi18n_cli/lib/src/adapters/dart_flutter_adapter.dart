@@ -130,8 +130,9 @@ class DartFlutterAdapter implements StackAdapter {
   tell homonyms apart. Never interpolate: `tr('Hi \$name')` cannot be
   extracted. Leave logs, ids, URLs and keys alone.
 - macOS needs `com.apple.security.network.client` in both entitlements files;
-  web needs the delivery CDN to allow the app's origin (CORS). doctor checks
-  both.''';
+  an Android release build needs `android.permission.INTERNET` in
+  `android/app/src/main/AndroidManifest.xml`; web needs the delivery CDN to
+  allow the app's origin (CORS). doctor checks all three.''';
     return '''### Flutter
 
 $strings
@@ -176,6 +177,7 @@ class _FlutterInit {
       ]) {
         _patchEntitlements(File(p.join(root, 'macos', 'Runner', name)));
       }
+      _declareInternet(File(_manifest(root, 'main')));
       _wireMain(File(p.join(root, 'lib', 'main.dart')), config);
     }
 
@@ -189,14 +191,14 @@ class _FlutterInit {
     var content = pubspec.readAsStringSync();
     var changed = false;
 
-    final stale = staleRuntimeConstraint(content);
+    final outdated = outdatedRuntimeConstraint(content);
     final withDep = addRuntimeDependency(content);
     if (withDep != null) {
       content = withDep;
       changed = true;
-      context.report('patched', pubspec.path, stale == null
+      context.report('patched', pubspec.path, outdated == null
           ? 'added easyi18n dependency'
-          : 'raised easyi18n $stale to $kRuntimeDependency');
+          : 'raised easyi18n $outdated to $kRuntimeDependency');
     } else {
       context.report('ok', pubspec.path, 'easyi18n already a dependency');
     }
@@ -249,6 +251,39 @@ class _FlutterInit {
     }
     context.write(plist, patched);
     context.report('patched', plist.path, 'granted $kNetworkClientKey');
+  }
+
+  void _declareInternet(File manifest) {
+    if (!manifest.existsSync()) {
+      context.report('skipped', manifest.path, 'no Android target');
+      return;
+    }
+    // Unlike the entitlements, an unreadable manifest must not stop init
+    // before main.dart: base init never read the file.
+    final String content;
+    try {
+      content = manifest.readAsStringSync();
+    } on FileSystemException catch (e) {
+      context.report('skipped', manifest.path,
+          'cannot read it (${e.message}) - declare $kInternetPermission by hand');
+      return;
+    }
+    switch (internetPermission(content)) {
+      case InternetPermission.declared:
+        context.report('ok', manifest.path, '$kInternetPermission already declared');
+      case InternetPermission.removed:
+        context.report('skipped', manifest.path,
+            '$kInternetPermission removed with tools:node="remove" - left as is');
+      case InternetPermission.missing:
+        final patched = addInternetPermission(content);
+        if (patched == null) {
+          context.report('skipped', manifest.path, 'no <manifest> tag binding '
+              'the Android namespace - declare $kInternetPermission by hand');
+          return;
+        }
+        context.write(manifest, patched);
+        context.report('patched', manifest.path, 'declared $kInternetPermission');
+    }
   }
 
   /// Both edits to `main.dart` from one read, so a dry run and a partial
@@ -323,6 +358,7 @@ class _FlutterDoctor {
     } else {
       _checkPubspec(File(p.join(root, 'pubspec.yaml')));
       _checkEntitlements(Directory(p.join(root, 'macos')));
+      _checkInternet(root);
     }
     final changed = PullRunner.changedTargets(
         CliState.load(File(p.join(root, CliState.dirName, CliState.fileName))),
@@ -372,10 +408,11 @@ class _FlutterDoctor {
     final content = _readText(pubspec, 'pubspec');
     if (content == null) return;
     _floorPubspec = content;
-    // addRuntimeDependency returns null exactly when the dependency already
-    // exists (any form) and resolves, which makes it a free read-only check.
+    // addRuntimeDependency returns null when the dependency exists and init
+    // has nothing to raise; a ^0.2.x it raises still resolves (#2526).
     final stale = staleRuntimeConstraint(content);
-    if (addRuntimeDependency(content) == null) {
+    if (addRuntimeDependency(content) == null ||
+        (stale == null && outdatedRuntimeConstraint(content) != null)) {
       _checks.ok('pubspec', pubspec.path, 'easyi18n is a dependency');
     } else if (stale != null) {
       _checks.fail('pubspec', pubspec.path,
@@ -460,6 +497,36 @@ class _FlutterDoctor {
             'could not verify $kNetworkClientKey (unrecognized plist shape)',
           );
       }
+    }
+  }
+
+  /// Reads the app's own main and release manifests, not the merged one a
+  /// Gradle build makes: a dependency can bring INTERNET in at build time,
+  /// so a miss warns where a missing macOS entitlement fails (#2340).
+  void _checkInternet(String root) {
+    final main = File(_manifest(root, 'main'));
+    if (!main.existsSync()) {
+      _checks.skip('permissions', 'android/', 'no Android target');
+      return;
+    }
+    final release = File(_manifest(root, 'release'));
+    final states = <String, InternetPermission>{};
+    for (final file in [main, if (release.existsSync()) release]) {
+      final content = _readText(file, 'permissions');
+      if (content == null) return;
+      states[file.path] = internetPermission(content);
+    }
+    String? where(InternetPermission state) =>
+        states.entries.where((e) => e.value == state).firstOrNull?.key;
+    if (where(InternetPermission.removed) case final path?) {
+      _checks.warn('permissions', path, '$kInternetPermission removed with '
+          'tools:node="remove" - a release build cannot reach delivery');
+    } else if (where(InternetPermission.declared) case final path?) {
+      _checks.ok('permissions', path, '$kInternetPermission declared');
+    } else {
+      _checks.warn('permissions', main.path, '$kInternetPermission missing - a '
+          'release build cannot reach delivery unless a dependency declares '
+          "it; run 'easyi18n init'");
     }
   }
 
@@ -771,3 +838,6 @@ class _FlutterDoctor {
 }
 
 enum _Entitlement { granted, denied, missing, unverifiable }
+
+String _manifest(String root, String sourceSet) =>
+    p.join(root, 'android', 'app', 'src', sourceSet, 'AndroidManifest.xml');

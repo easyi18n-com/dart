@@ -9,6 +9,7 @@ import 'exceptions.dart';
 import 'fill_completeness.dart';
 import 'http_capped.dart';
 import 'iso_zone.dart';
+import 'login_store.dart';
 
 /// Keep 500: exhausted backend read retries can kill a paid fill poll (#591).
 /// Shared with JSON retryability; this does not authorize POST replay.
@@ -579,6 +580,40 @@ class KeyProject {
   String get describe => hasHandle ? '@$workspace/$slug' : id;
 }
 
+/// A project as the management routes name it (`GET /v1/me/workspaces`).
+class AccountProject extends KeyProject {
+  AccountProject({required super.id, super.workspace, super.slug,
+      required this.workspaceId, this.name, this.baseCode, this.role});
+
+  final String workspaceId;
+  final String? name, baseCode, role;
+
+  /// The route's own shape: `workspace` is absent until the handle is claimed.
+  Map<String, Object?> toJson() => {'id': id, 'workspace_id': workspaceId,
+      'workspace': ?workspace, 'slug': slug, 'name': name, 'base_code': baseCode,
+      'role': role};
+}
+
+/// A workspace of the login's person, with their role and their projects in it.
+class AccountWorkspace {
+  AccountWorkspace({required this.id, this.handle, this.name, required this.plan,
+      required this.role, required this.projects});
+
+  final String id;
+
+  /// The claimed `@handle`, null until it is claimed.
+  final String? handle;
+  final String? name;
+  final String plan, role;
+  final List<AccountProject> projects;
+
+  String get describe => handle == null ? id : '@$handle';
+
+  Map<String, Object?> toJson() => {'id': id, 'workspace': ?handle, 'name': name,
+      'plan': plan, 'role': role,
+      'projects': [for (final project in projects) project.toJson()]};
+}
+
 final _versionSegment = RegExp(r'^[A-Za-z0-9_.-]{1,128}$');
 
 /// Whether [raw] is a version the restore path can carry: the backend's own
@@ -797,6 +832,70 @@ class TranslationsApiClient {
     return KeyProject(id: id, workspace: _str(project as Map, 'workspace'),
         slug: _str(project, 'slug'));
   }
+
+  /// `GET /v1/me` - the account of this login and when the login expires.
+  Future<({String? email, DateTime? expiresAt})> fetchMe() async {
+    final response = await _get(Uri.parse('$baseUrl/v1/me'));
+    if (response.statusCode != 200) throw _apiError(response, action: 'Whoami');
+    final body = _envelope(response);
+    return (email: _str(body, 'email'),
+        expiresAt: DateTime.tryParse(_str(body, 'expires_at') ?? '')?.toUtc());
+  }
+
+  /// `GET /v1/me/workspaces` - where this login works.
+  Future<List<AccountWorkspace>> fetchWorkspaces() async {
+    final response = await _get(Uri.parse('$baseUrl/v1/me/workspaces'));
+    if (response.statusCode != 200) throw _apiError(response, action: 'Workspaces');
+    final rows = _list(_envelope(response), 'workspaces') ??
+        (throw _wrongShape("'workspaces'", 'an array', null));
+    return [
+      for (final w in rows.whereType<Map<Object?, Object?>>())
+        AccountWorkspace(id: _need(w, 'id'), handle: _str(w, 'workspace'),
+          name: _str(w, 'name'), plan: _str(w, 'plan') ?? 'free',
+          role: _str(w, 'role') ?? '', projects: [
+            for (final p in (_list(w, 'projects') ?? const []).whereType<Map<Object?, Object?>>())
+              _accountProject(p),
+          ]),
+    ];
+  }
+
+  /// `POST /v1/workspaces/{wid}/projects` - creates as the login's person; a
+  /// repeat without [slug] within a minute answers 200 with the same project.
+  Future<AccountProject> createProject({required String workspaceId,
+      required String name, String? slug, required String baseCode,
+      List<String> targetLanguages = const [], String? stack}) => _post(
+    'workspaces/$workspaceId/projects',
+    action: 'Create project',
+    okStatuses: const {200, 201},
+    body: {'name': name, 'slug': ?slug, 'base_code': baseCode,
+      if (targetLanguages.isNotEmpty) 'target_languages': targetLanguages,
+      'stack': ?stack},
+    parser: _accountProject,
+    successBodyHint: 'The server answered success, so the project may exist: '
+        "run 'easyi18n init' again to link it.",
+  );
+
+  /// `POST /v1/projects/{id}/api-keys` - a key for CI, minted by a login. The
+  /// answer is the only time the secret is shown.
+  Future<({String id, String prefix, String rawKey})> mintApiKey({
+      required String projectId, required String label,
+      required List<String> scopes}) => _post(
+    'projects/$projectId/api-keys',
+    action: 'Mint API key',
+    body: {'label': label, 'scopes': scopes},
+    parser: (b) => (id: _need(b, 'id'), prefix: _need(b, 'prefix'),
+        rawKey: _need(b, 'raw_key')),
+    successBodyHint: 'The server answered success, so a key may exist that '
+        'this run never showed: revoke it under Settings > API keys.',
+  );
+
+  AccountProject _accountProject(Map<Object?, Object?> p) => AccountProject(
+      id: _need(p, 'id'), workspaceId: _need(p, 'workspace_id'),
+      workspace: _str(p, 'workspace'), slug: _str(p, 'slug'), name: _str(p, 'name'),
+      baseCode: _str(p, 'base_code'), role: _str(p, 'role'));
+
+  String _need(Map<Object?, Object?> m, String key) =>
+      _str(m, key) ?? (throw _wrongShape("'$key'", 'a string', null));
 
   /// `GET /v1/projects/resolve?workspace=&project=` - maps the config's
   /// `@handle/slug` ref to the opaque ids the id-bound write routes need. Any
@@ -1302,6 +1401,64 @@ class TranslationsApiClient {
     );
   }
 
+  /// `POST /v1/auth/device` (ci-sync §6): a login request for this machine,
+  /// asked with no credential.
+  Future<({String deviceCode, String userCode, String uri, String complete,
+      int interval, int expiresIn})> startDeviceLogin(String deviceName) async {
+    final response =
+        await _auth('device', {'client': 'cli', 'device_name': deviceName});
+    if (response.statusCode != 200) throw _apiError(response, action: 'Login');
+    final b = _envelope(response);
+    String need(String key) =>
+        _str(b, key) ?? (throw _wrongShape("'$key'", 'a string', null));
+    return (deviceCode: need('device_code'), userCode: need('user_code'),
+        uri: need('verification_uri'), complete: need('verification_uri_complete'),
+        interval: _num(b, 'interval')?.toInt() ?? 5,
+        expiresIn: _num(b, 'expires_in')?.toInt() ?? 900);
+  }
+
+  /// One poll of `POST /v1/auth/device/token`: the login once approved, else
+  /// the code of a `428` or `429` and its `Retry-After`. A final answer
+  /// (`denied`, `expired`, `login_limit_reached`) throws.
+  Future<({StoredLogin? login, String? code, int? retryAfter})> pollDeviceLogin(
+      String deviceCode) async {
+    final response = await _auth('device/token', {'device_code': deviceCode});
+    if (response.statusCode == 200) {
+      final b = _envelope(response);
+      final token = _str(b, 'access_token');
+      if (token == null || token.isEmpty) {
+        throw _wrongShape("'access_token'", 'a non-empty string', token);
+      }
+      return (login: StoredLogin(token: token, email: _str(b, 'email'),
+          expiresAt: DateTime.tryParse(_str(b, 'expires_at') ?? '')?.toUtc()),
+          code: null, retryAfter: null);
+    }
+    if (response.statusCode != 428 && response.statusCode != 429) {
+      throw _apiError(response, action: 'Login');
+    }
+    return (login: null, code: _errorCodeOf(response),
+        retryAfter: int.tryParse(response.headers['retry-after'] ?? ''));
+  }
+
+  /// `POST /v1/auth/logout` with this login: true once revoked, false when
+  /// the server no longer knew it.
+  Future<bool> logout() async {
+    final response = await _auth('logout', const {});
+    if (response.statusCode == 401) return false;
+    if (response.statusCode != 204) throw _apiError(response, action: 'Logout');
+    return true;
+  }
+
+  /// The device routes take no credential, so an empty [token] sends none.
+  Future<http.Response> _auth(String path, Map<String, Object?> body) => _send(
+        () => http.Request('POST', Uri.parse('$baseUrl/v1/auth/$path'))
+          ..headers.addAll({'content-type': 'application/json',
+            if (token.isNotEmpty) 'authorization': 'Bearer $token'})
+          ..body = jsonEncode(body),
+        shouldRetry: (_) => false,
+        retryTransport: false,
+      );
+
   void close() => _client.close();
 
   Future<http.Response> _sendCapped(http.BaseRequest request) =>
@@ -1408,12 +1565,18 @@ class TranslationsApiClient {
     }
 
     final hint = switch (response.statusCode) {
+      // A login's own refusal already names `easyi18n login` (#2580).
+      401 when code == 'login_expired' || code == 'login_revoked' => '',
+      401 when token.startsWith('eip_') =>
+        "\nThis login is no longer valid. Run 'easyi18n login' to sign in again.",
       401 => '\nCheck your token (EASYI18N_TOKEN) - it needs the right scope.',
       // 402 covers out-of-credits, plan caps (e.g. the free-tier key limit)
       // and the monthly spending cap. Only the credits case warrants the
       // top-up hint; for a plan limit the server message already says what to
       // do, and topping up cannot clear a spending cap — offering it there
       // contradicts the reason the server just gave.
+      429 when action == 'Login' =>
+        '\nTry again in ${response.headers['retry-after'] ?? 60} seconds.',
       402 when code == 'spend_cap_exceeded' =>
         '\nThe monthly spending cap refused this run, not the balance. Raise '
             'the cap in billing settings, or narrow the push '

@@ -209,6 +209,50 @@ void main() {
     );
   });
 
+  // #2583, decision 4: a login is refused for its own reason, and that reason
+  // names `easyi18n login`; the API key hint would tell the person to check a
+  // token they never set.
+  group('a 401 for a login', () {
+    TranslationsApiClient login(Object body) => TranslationsApiClient(
+      baseUrl: 'https://api.easyi18n.com', token: 'eip_stored',
+      httpClient: MockClient((_) async => http.Response(jsonEncode(body), 401)),
+    );
+
+    for (final code in ['login_expired', 'login_revoked']) {
+      test('$code keeps the server message alone', () async {
+        final message = code == 'login_expired'
+            ? 'this login expired; run `easyi18n login` to sign in again'
+            : 'this login was signed out; run `easyi18n login` to sign in again';
+        await expectLater(
+          login({'error': code, 'message': message})
+              .fetchTranslations(projectId: 'p', format: 'arb'),
+          throwsA(isA<ApiException>()
+              .having((e) => e.message, 'message', 'Pull failed: $message')
+              .having((e) => e.code, 'code', code)
+              .having((e) => e.statusCode, 'statusCode', 401)),
+        );
+      });
+
+      test('$code drops the token hint whatever the credential', () async {
+        final client = clientReturning(
+            (_) => http.Response(jsonEncode({'error': code}), 401));
+        await expectLater(client.fetchTranslations(projectId: 'p', format: 'arb'),
+            throwsA(isA<ApiException>().having((e) => e.message, 'message',
+                isNot(contains('EASYI18N_TOKEN')))));
+      });
+    }
+
+    test('an unknown login says it no longer holds and names easyi18n login', () async {
+      await expectLater(
+        login({'error': 'unauthorized', 'message': 'invalid credential'})
+            .fetchTranslations(projectId: 'p', format: 'arb'),
+        throwsA(isA<ApiException>().having((e) => e.message, 'message',
+            'Pull failed: invalid credential\nThis login is no longer valid. '
+            "Run 'easyi18n login' to sign in again.")),
+      );
+    });
+  });
+
   test('gives a credits hint on a 402 out-of-credits push', () async {
     final client = clientReturning(
       (req) => http.Response(
@@ -510,6 +554,83 @@ void main() {
             .having((e) => e.statusCode, 'status', 400)
             .having((e) => e.code, 'code', 'invalid_argument')),
       );
+    });
+  });
+
+  group('the login routes (#2584)', () {
+    test('fetchMe reads the email and the expiry', () async {
+      late http.Request sent;
+      final me = await clientReturning((req) {
+        sent = req;
+        return http.Response(jsonEncode({'email': 'me@acme.test',
+            'expires_at': '2026-12-04T18:07:34.841Z'}), 200);
+      }).fetchMe();
+      expect(sent.method, 'GET');
+      expect(sent.url.path, '/v1/me');
+      expect(sent.headers['authorization'], 'Bearer eik_secret');
+      expect(me.email, 'me@acme.test');
+      expect(me.expiresAt, DateTime.utc(2026, 12, 4, 18, 7, 34, 841));
+    });
+
+    test('fetchWorkspaces reads a handle only once it is claimed', () async {
+      final rows = await clientReturning((req) {
+        expect(req.url.path, '/v1/me/workspaces');
+        return http.Response(jsonEncode({'workspaces': [
+          {'id': 'personal_u1', 'name': 'Personal', 'plan': 'free', 'role': 'owner',
+            'projects': [{'id': 'p1', 'workspace_id': 'personal_u1', 'slug': 'app',
+              'name': 'App', 'base_code': 'en', 'role': 'editor'}]},
+          {'id': 'w2', 'workspace': 'acme', 'name': 'Acme', 'plan': 'pro',
+            'role': 'viewer', 'projects': []},
+        ]}), 200);
+      }).fetchWorkspaces();
+      expect([for (final w in rows) (w.describe, w.plan, w.role)],
+          [('personal_u1', 'free', 'owner'), ('@acme', 'pro', 'viewer')]);
+      final project = rows.first.projects.single;
+      expect((project.describe, project.workspaceId, project.baseCode, project.role),
+          ('p1', 'personal_u1', 'en', 'editor'));
+      expect(project.toJson().containsKey('workspace'), isFalse);
+    });
+
+    test('a list without workspaces, or a row without its id, is the wrong shape',
+        () async {
+      for (final body in [{}, {'workspaces': [{'name': 'x'}]},
+          {'workspaces': [{'id': 'w', 'projects': [{'id': 'p'}]}]}]) {
+        await expectLater(
+            clientReturning((_) => http.Response(jsonEncode(body), 200)).fetchWorkspaces(),
+            throwsA(isA<FatalCliException>()), reason: '$body');
+      }
+    });
+
+    test('createProject reads the project, mintApiKey insists on the secret', () async {
+      final project = await clientReturning((req) {
+        expect((req.method, req.url.path), ('POST', '/v1/workspaces/w1/projects'));
+        return http.Response(jsonEncode({'id': 'p1', 'workspace_id': 'w1', 'slug': 'app',
+          'name': 'App', 'base_code': 'en', 'role': 'owner'}), 200);
+      }).createProject(workspaceId: 'w1', name: 'App', baseCode: 'en');
+      expect((project.id, project.describe, project.baseCode), ('p1', 'p1', 'en'));
+      await expectLater(
+          clientReturning((_) => http.Response(jsonEncode({'id': 'k1', 'prefix': 'eik_abcd'}), 201))
+              .mintApiKey(projectId: 'p1', label: 'ci', scopes: const ['read']),
+          throwsA(isA<FatalCliException>().having((e) => e.message, 'message', contains("'raw_key'"))));
+    });
+
+    test('a workspace refusal keeps its status and code', () async {
+      await expectLater(
+          clientReturning((_) => http.Response(
+              jsonEncode({'error': 'login_revoked', 'message': 'signed out'}), 401))
+              .fetchWorkspaces(),
+          throwsA(isA<ApiException>()
+              .having((e) => e.statusCode, 'statusCode', 401)
+              .having((e) => e.code, 'code', 'login_revoked')));
+    });
+
+    test('a refusal keeps its status and code', () async {
+      await expectLater(
+          clientReturning((_) => http.Response(
+              jsonEncode({'error': 'login_revoked', 'message': 'signed out'}), 401)).fetchMe(),
+          throwsA(isA<ApiException>()
+              .having((e) => e.statusCode, 'statusCode', 401)
+              .having((e) => e.code, 'code', 'login_revoked')));
     });
   });
 

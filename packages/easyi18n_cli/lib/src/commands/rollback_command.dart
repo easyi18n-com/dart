@@ -25,7 +25,7 @@ class RollbackCommand extends Command<int> with JsonPresenter {
       'token',
       help:
           'API key (eik_) with the publish scope. '
-          'Defaults to \$EASYI18N_TOKEN.',
+          'Defaults to \$EASYI18N_TOKEN, then your easyi18n login.',
     );
   }
 
@@ -62,7 +62,7 @@ class RollbackCommand extends Command<int> with JsonPresenter {
 
     final token = requireToken(
       token: argResults!['token'] as String?, environment: _environment,
-      scope: 'publish',
+      scope: 'publish', baseUrl: config.baseUrl,
     );
     final outcome = await RollbackRunner().run(
       config: config, configPath: configPath, token: token, logger: _logger,

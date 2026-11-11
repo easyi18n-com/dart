@@ -44,9 +44,11 @@ final rollbackTool = McpTool(
   Tool(
     name: 'rollback',
     description: 'Restore a previously published version and serve it again, '
-        'as a new version. Needs the operation_id of an approved '
-        'authorize {action: rollback}. Use it to undo a bad publish: readers '
-        'see the restored content immediately.',
+        'as a new version. Call authorize {action: rollback} first. With a '
+        'key in EASYI18N_TOKEN, pass the operation_id it returns once the '
+        'human approves; when it answers that none is needed, as it does for '
+        "the human's easyi18n login, roll back without one. Use it to undo a "
+        'bad publish: readers see the restored content immediately.',
     annotations: ToolAnnotations(
       idempotentHint: false,
       openWorldHint: true,
@@ -56,29 +58,30 @@ final rollbackTool = McpTool(
     inputSchema: toolSchema(
       properties: {
         'operation_id': Schema.string(
-          description: 'The approved rollback operation. Always required.',
+          description: 'The approved rollback operation. Required unless '
+              'authorize answered that none is needed.',
         ),
         ...rollbackInputs,
       },
     ),
   ),
   (request, deps) async {
-    final operationId = stringArg(request, 'operation_id')?.trim();
-    if (operationId == null || operationId.isEmpty) {
-      return toolError(
-        'rollback needs an approved operation: call '
-        'authorize {action: rollback}, give the human the approval_url, and '
-        'roll back with its operation_id once the state is approved.',
-        code: 'authorization_required',
-      );
-    }
+    final operationId = switch (stringArg(request, 'operation_id')?.trim()) {
+      null || '' => null,
+      final id => id,
+    };
     final version = rollbackTarget(request);
     final configPath = deps.configPathFor(stringArg(request, 'project_dir'));
     final config = Easyi18nConfig.load(File(configPath), logger: deps.logger);
     refuseUntrustedTarget(config.baseUrl, environment: deps.environment);
+    // The login rolls back as its human (decision 1 of #2579); a key needs
+    // the operation (D17).
+    if (operationId == null && !deps.usesLogin(config.baseUrl)) {
+      return _unapproved();
+    }
     return withProject(
       config: config,
-      token: deps.requireToken(scope: 'publish'),
+      token: deps.requireToken(config.baseUrl, scope: 'publish'),
       logger: deps.logger,
       apiClientFactory: deps.apiClientFactory,
       body: (client, projectId) async {
@@ -98,10 +101,20 @@ final rollbackTool = McpTool(
   },
 );
 
+/// A rollback with no operation, refused here for a key or by the door for a
+/// login it makes ask.
+CallToolResult _unapproved({int? statusCode}) => toolError(
+  'rollback needs an approved operation: call '
+  'authorize {action: rollback}, give the human the approval_url, and '
+  'roll back with its operation_id once the state is approved.',
+  code: 'authorization_required',
+  statusCode: statusCode,
+);
+
 Future<CallToolResult> _refused(
   TranslationsApiClient client,
   ApiException error,
-  String operationId,
+  String? operationId,
   String version,
 ) async {
   switch (error.code) {
@@ -115,11 +128,13 @@ Future<CallToolResult> _refused(
         code: 'scope_changed',
         statusCode: error.statusCode,
       );
-    case 'authorization_required':
-    case 'operation_not_approved':
-    case 'operation_not_found':
+    case 'authorization_required' ||
+          'operation_not_approved' ||
+          'operation_not_found' when operationId != null:
       return approvalRefused(client, error, operationId,
           action: 'rollback', second: 'to go back again');
+    case 'authorization_required':
+      return _unapproved(statusCode: error.statusCode);
     default:
       return errorFrom(error);
   }

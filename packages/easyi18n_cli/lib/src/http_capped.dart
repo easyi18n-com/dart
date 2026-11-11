@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
@@ -12,7 +13,23 @@ const int kMaxResponseBytes = 64 * 1024 * 1024;
 
 /// Sends [request] and reads at most [kMaxResponseBytes], aborting a body
 /// that declares or streams past the ceiling instead of buffering it whole.
+///
+/// A [TlsException], at the handshake or mid-body, comes out as the
+/// [http.ClientException] a refused connection already is: `IOClient`
+/// converts only socket and HTTP errors, and every caller reports a
+/// [http.ClientException] as "Could not reach".
 Future<http.Response> sendCapped(
+  http.Client client,
+  http.BaseRequest request,
+) async {
+  try {
+    return await _sendCapped(client, request);
+  } on TlsException catch (e) {
+    throw http.ClientException('$e'.replaceAll(RegExp(r'\s+'), ' '), request.url);
+  }
+}
+
+Future<http.Response> _sendCapped(
   http.Client client,
   http.BaseRequest request,
 ) async {

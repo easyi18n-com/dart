@@ -11,6 +11,7 @@ import '../output_format.dart';
 import '../pull_runner.dart';
 import '../resolve.dart';
 import '../security.dart';
+import '../session.dart';
 
 /// Builds the API client `pull` talks to. Injected so tests can swap in a
 /// `MockClient`-backed instance.
@@ -44,7 +45,7 @@ class PullCommand extends Command<int> with JsonPresenter {
         'token',
         help:
             'API key (eik_) with read scope; adopting a missing format also needs write. '
-            'Defaults to \$EASYI18N_TOKEN.',
+            'Defaults to \$EASYI18N_TOKEN, then your easyi18n login.',
       )
       ..addOption(
         'version',
@@ -99,8 +100,6 @@ class PullCommand extends Command<int> with JsonPresenter {
   /// forever. Null (production) never stops.
   final int? _watchCyclesForTest;
 
-  static const String tokenEnvVar = 'EASYI18N_TOKEN';
-
   @override
   String get name => 'pull';
 
@@ -115,16 +114,12 @@ class PullCommand extends Command<int> with JsonPresenter {
         globalResults?['config'] as String? ?? Easyi18nConfig.fileName;
     final config = Easyi18nConfig.load(File(configPath), logger: _logger);
 
-    final token =
-        (results['token'] as String?)?.trim() ??
-        _environment[tokenEnvVar]?.trim();
-    if (token == null || token.isEmpty) {
-      throw CliException(
-        'No credential. Set $tokenEnvVar or pass --token.\n'
-        'Create an API key in your project settings with read scope. '
-        'Adopting a missing format also requires write scope.',
-      );
-    }
+    final token = requireCredential(
+      token: results['token'] as String?, environment: _environment,
+      baseUrl: config.baseUrl,
+      need: 'Create an API key in your project settings with read scope. '
+          'Adopting a missing format also requires write scope.',
+    );
 
     warnOnUntrustedTarget(config.baseUrl, _logger);
 

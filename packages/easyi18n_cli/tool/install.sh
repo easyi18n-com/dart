@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the easyi18n CLI as a standalone binary: no Dart SDK needed.
 #
-#   curl -fsSL https://github.com/liontude/easyi18n-dart/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/easyi18n-com/dart/releases/latest/download/install.sh | sh
 #
 # EASYI18N_VERSION      a release such as 1.0.0 (default: the latest one)
 # EASYI18N_INSTALL_DIR  where `easyi18n` goes (default: ~/.local/bin)
@@ -11,7 +11,7 @@
 # `dart pub global activate easyi18n_cli`.
 set -eu
 
-releases="${EASYI18N_RELEASES_URL:-https://github.com/liontude/easyi18n-dart/releases}"
+releases="${EASYI18N_RELEASES_URL:-https://github.com/easyi18n-com/dart/releases}"
 dest="${EASYI18N_INSTALL_DIR:-$HOME/.local/bin}"
 
 die() {

@@ -43,7 +43,8 @@ Future<({int code, Transcript transcript})> _invoke(
   return (code: code ?? 0, transcript: transcript);
 }
 
-Future<Map<String, dynamic>> _record(String client, {String? runner}) async {
+Future<Map<String, dynamic>> _record(String client,
+    {String? runner, bool agentKey = false}) async {
   final result = await _invoke([
     '--json',
     'mcp',
@@ -51,6 +52,7 @@ Future<Map<String, dynamic>> _record(String client, {String? runner}) async {
     '--client',
     client,
     if (runner != null) ...['--runner', runner],
+    if (agentKey) '--agent-key',
   ]);
   expect(result.code, 0);
   final records = result.transcript.records;
@@ -60,27 +62,32 @@ Future<Map<String, dynamic>> _record(String client, {String? runner}) async {
 }
 
 void main() {
-  for (final runner in [(null, _npx), ('dart', _dart)]) {
-    final label = runner.$1 ?? 'npx (default)';
+  for (final (runner, agentKey) in [
+    for (final runner in [(null, _npx), ('dart', _dart)])
+      for (final agentKey in [false, true]) (runner, agentKey),
+  ]) {
+    final label = '${runner.$1 ?? 'npx (default)'}${agentKey ? ', --agent-key' : ''}';
+    final argv = [...runner.$2, if (agentKey) '--require-agent-key'];
     group('runner $label', () {
       for (final MapEntry(key: client, value: key) in _jsonServers.entries) {
         test('$client prints JSON that launches the server', () async {
-          final record = await _record(client, runner: runner.$1);
+          final record = await _record(client, runner: runner.$1, agentKey: agentKey);
+          expect(record['agent_key'], agentKey);
           expect(record['format'], 'json');
           final snippet = jsonDecode(record['snippet'] as String) as Map;
           final server = (snippet[key] as Map)['easyi18n'] as Map;
-          expect([server['command'], ...server['args'] as List], runner.$2);
+          expect([server['command'], ...server['args'] as List], argv);
         });
       }
 
-      test('codex prints a TOML table that forwards the key', () async {
-        final record = await _record('codex', runner: runner.$1);
+      test('codex prints a TOML table, forwarding the key only with one', () async {
+        final record = await _record('codex', runner: runner.$1, agentKey: agentKey);
         expect(record['format'], 'toml');
         expect((record['snippet'] as String).split('\n'), [
           '[mcp_servers.easyi18n]',
           'command = "${runner.$2.first}"',
-          'args = [${runner.$2.skip(1).map((a) => '"$a"').join(', ')}]',
-          'env_vars = ["EASYI18N_TOKEN"]',
+          'args = [${argv.skip(1).map((a) => '"$a"').join(', ')}]',
+          if (agentKey) 'env_vars = ["EASYI18N_TOKEN"]',
           // A cold `npx` took 19.9 s against Codex's 10 s default (#1930).
           'startup_timeout_sec = 60',
           'required = true',
@@ -89,20 +96,42 @@ void main() {
       });
 
       test('claude-code prints one `claude mcp add` command', () async {
-        final record = await _record('claude-code', runner: runner.$1);
+        final record = await _record('claude-code', runner: runner.$1, agentKey: agentKey);
         expect(record['format'], 'shell');
         expect(
           record['snippet'],
-          'claude mcp add --env EASYI18N_TOKEN=eik_YOUR_AGENT_KEY '
-          '--transport stdio easyi18n -- ${runner.$2.join(' ')}',
+          'claude mcp add ${agentKey ? '--env EASYI18N_TOKEN=eik_YOUR_AGENT_KEY ' : ''}'
+          '--transport stdio easyi18n -- ${argv.join(' ')}',
         );
       });
     });
   }
 
+  test('without --agent-key no snippet names a key: the server sends the login',
+      () async {
+    for (final client in [..._jsonServers.keys, 'codex', 'claude-code']) {
+      for (final runner in ['npx', 'dart']) {
+        final record = await _record(client, runner: runner);
+        expect(record['snippet'], isNot(contains('EASYI18N_TOKEN')), reason: client);
+        expect(record['snippet'], isNot(contains('eik_')), reason: client);
+        expect(record['target'], isNot(contains('EASYI18N_TOKEN')), reason: client);
+        if (_jsonServers[client] case final key?) {
+          final snippet = jsonDecode(record['snippet'] as String) as Map;
+          final server = (snippet[key] as Map)['easyi18n'] as Map;
+          expect(server['env'],
+              ['cursor', 'vscode'].contains(client)
+                  ? {'EASYI18N_PROJECT_DIR': r'${workspaceFolder}'}
+                  : isNull,
+              reason: client);
+          expect(snippet.containsKey('inputs'), isFalse, reason: client);
+        }
+      }
+    }
+  });
+
   test('a file that lives in the repo never carries a key', () async {
     for (final client in _projectFiles) {
-      final record = await _record(client);
+      final record = await _record(client, agentKey: true);
       expect(
         record['snippet'],
         isNot(contains(RegExp(r'eik_\w'))),
@@ -118,8 +147,8 @@ void main() {
     }
   });
 
-  test('vscode asks for the key through a password input', () async {
-    final record = await _record('vscode');
+  test('vscode asks for the agent key through a password input', () async {
+    final record = await _record('vscode', agentKey: true);
     final snippet = jsonDecode(record['snippet'] as String) as Map;
     final input = (snippet['inputs'] as List).single as Map;
     expect(input['type'], 'promptString');
@@ -135,12 +164,14 @@ void main() {
   test("never writes the caller's own key into a snippet", () async {
     const live = 'eik_live_0123456789abcdef';
     for (final client in [..._jsonServers.keys, 'codex', 'claude-code']) {
-      final result = await _invoke(
-        ['mcp', 'config', '--client', client],
-        environment: {'EASYI18N_TOKEN': live},
-      );
-      final text = result.transcript.records.map((r) => r.line).join('\n');
-      expect(text, isNot(contains('live_0123')), reason: client);
+      for (final agentKey in [false, true]) {
+        final result = await _invoke(
+          ['mcp', 'config', '--client', client, if (agentKey) '--agent-key'],
+          environment: {'EASYI18N_TOKEN': live},
+        );
+        final text = result.transcript.records.map((r) => r.line).join('\n');
+        expect(text, isNot(contains('live_0123')), reason: client);
+      }
     }
   });
 
@@ -154,7 +185,13 @@ void main() {
       final err = result.transcript.records.where((r) => r.channel == 'err');
       expect(out.map((r) => r.line).join('\n'), record['snippet']);
       expect(err.map((r) => r.line).join('\n'), contains(record['target']));
-      expect(record['target'], contains('.codex/config.toml'));
+      expect(err.last.line, "The server sends this machine's easyi18n login. For CI, "
+          'or an agent whose spending waits for approval, pass --agent-key.');
+      expect(record['target'], 'Append it to ~/.codex/config.toml.');
+      final keyed = await _invoke(['mcp', 'config', '--client', 'codex', '--agent-key']);
+      expect(keyed.transcript.records.where((r) => r.channel == 'err').map((r) => r.line),
+          ['Append it to ~/.codex/config.toml. Codex forwards EASYI18N_TOKEN from the '
+              'shell it runs in.']);
     },
   );
 

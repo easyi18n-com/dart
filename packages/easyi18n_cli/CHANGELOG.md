@@ -1,5 +1,219 @@
 # Changelog
 
+## 1.2.2
+
+The commands and the MCP tools are those of 1.2.1. What changes is where
+the public repositories live, and with it the URLs the CLI writes and
+downloads from.
+
+- The source of the CLI and its binaries live in `easyi18n-com/dart`.
+  pub.dev lists it as the repository and issue tracker, `easyi18n init`
+  writes `# Docs: https://github.com/easyi18n-com/dart` in the header of
+  `easyi18n.yaml`, and `install.sh`, the npm package and the Claude Code
+  plugin download the binary from its releases.
+- The agent integrations live in `easyi18n-com/agents`: the npm package
+  `@easyi18n.com/cli` and the MCP Registry entry `com.easyi18n/cli` point
+  there, and Gemini CLI installs the server with
+  `gemini extensions install https://github.com/easyi18n-com/agents`.
+- The Claude Code marketplace is named `easyi18n.com` and is added with
+  `/plugin marketplace add easyi18n-com/agents`. The plugin README no
+  longer has the section on moving an install from the old marketplace.
+
+## 1.2.1
+
+The binary, its commands and the MCP tools are those of 1.2.0. What
+changes is how the server is listed and installed.
+
+- The npm package `@easyi18n.com/cli` declares
+  `"mcpName": "com.easyi18n/cli"`, the name the official MCP Registry
+  checks before it lists the server.
+- Gemini CLI installs the server with
+  `gemini extensions install https://github.com/liontude/easyi18n-agents`:
+  the extension is `easyi18n` and its server `cli`.
+- The Claude Code plugin names its pieces once: the marketplace is
+  `liontude`, the command `/easyi18n:doctor`, the skills `easyi18n:setup`
+  and `easyi18n:translate`, and the server `plugin:easyi18n:cli`. An
+  install made before keeps the marketplace name `easyi18n`; the plugin
+  README says how to move.
+- The plugin runs no hook at session start. Claude Code starts the MCP
+  server first, and its launcher already installs the CLI.
+
+## 1.2.0
+
+- The MCP `init`, with your login and no project ref or `easyi18n.yaml`,
+  answers your workspaces and their projects instead of "Missing project
+  ref", and writes nothing: the agent asks you which one to link or what to
+  create. `init {workspace, create: {name, base_code?, target_languages?}}`
+  creates the project with this tree's stack and base language, enables its
+  output format and writes `easyi18n.yaml`. `create` is refused with an API
+  key in `EASYI18N_TOKEN`, over an existing `easyi18n.yaml` without `force`,
+  and with `dry_run`. The `setup` prompt sends you to `easyi18n login` first
+  and keeps the Agent key for CI. The MCP never mints an API key.
+- `easyi18n init` with your login and no project ref sets the project up
+  on the server: it lists your workspaces, links a project or creates one
+  (named after the directory, base language from the catalog or the source
+  file, target languages), adds the languages a linked project lacks and
+  enables its output format, then writes `easyi18n.yaml`. Without a
+  terminal, `--workspace`, `--project`, `--create`, `--languages` and
+  `--base` make the same choices. On a Free workspace that already has 3
+  projects it shows the server's message, names Workspace > Billing and
+  offers to link one instead, and writes nothing. `--ci` mints an API key
+  for CI and prints it once with the `gh secret set EASYI18N_TOKEN` line.
+  With a login, the last line no longer says to set `EASYI18N_TOKEN`.
+  `--workspace` and `--project` alone, or `EASYI18N_TOKEN`, keep `init`
+  offline as before.
+- `easyi18n whoami` asks the server whether the login still works
+  (`GET /v1/me`) and lists its workspaces, with the role in each and their
+  projects. A login the server refuses ends with exit 1 and `valid: false`.
+  A server it cannot reach, or one without the route yet, leaves what this
+  machine stored, with a warning, exit 0 and `valid: null`. `--json` adds
+  `valid` and `workspaces`. `easyi18n mcp config` prints snippets without
+  `EASYI18N_TOKEN`: the server sends this machine's `easyi18n login`.
+  `--agent-key` adds `mcp --require-agent-key`. The server refuses to start
+  with a missing key or the example placeholder.
+- The MCP server (`easyi18n mcp`) takes the login `easyi18n login` stored
+  for the base URL of each call when `EASYI18N_TOKEN` is unset, blank or the
+  placeholder, and reads it on every call: a login or a logout in another
+  terminal needs no restart of the client. With the login, `push`, `sync`,
+  `publish` and `rollback` go without an `operation_id`, and `authorize`
+  mints no operation and answers which tool to call, unless the server says
+  that login needs an approval. An API key in `EASYI18N_TOKEN` keeps the
+  approval rules as they were. An ingest above `EASYI18N_MCP_MAX_CREDITS`
+  answers `above_ceiling` before sending anything. `status` and `init`
+  without `easyi18n.yaml` ask the server nothing with a login: `init` asks
+  for the project ref. `doctor` names the login on its `credential` line,
+  also before `init`, and its `agent_key` check passes for a login. The
+  server instructions, the `setup` prompt, the `AGENTS.md` block and the
+  `no_credential` error name `easyi18n login`.
+- `easyi18n login` logs this machine in as you: it opens the approval page
+  with the code in the URL (`--no-browser` prints the page and the code
+  instead), waits for the approval and keeps the login for 30 days in
+  `credentials.json`, 0600 inside a 0700 directory. `--json` prints
+  `{email, base_url, expires_at}`, never the token. It uses the base URL the
+  other commands call and refuses, before any request, one that is not
+  production over https, a loopback address or exactly `EASYI18N_BASE_URL`.
+  A second `login` on the same base URL signs the previous one out, so
+  logging in again does not spend one of the account's 10 logins.
+- `easyi18n logout` signs the login of this base URL out on the server and
+  forgets it here, also when the server cannot be reached, and says which
+  happened. `--json` prints `{base_url, removed, revoked}`. Logins for other
+  base URLs stay. `easyi18n whoami` shows the stored login's email and
+  expiry, and says when `EASYI18N_TOKEN` is set
+  and wins over it. `--json` prints `{logged_in, email, base_url,
+  expires_at, uses_env_token}`; with no login, or an expired one, it exits 1
+  with `not_logged_in` or `login_expired`. The `--token` help of every
+  command, and `doctor`'s checks that need the API, now name the login.
+  `logout`, `whoami` and `doctor` name a `credentials.json` this CLI cannot
+  read, as the error with no credential does, without printing it. A disk
+  that refuses to write `credentials.json` ends `login` or `logout` with an
+  error that names the file instead of a crash.
+- Every command that calls the API, `doctor` included, sends the login
+  stored in `credentials.json` for the base URL of the call when neither
+  `--token` nor `EASYI18N_TOKEN` names a credential. The file lives in
+  `$XDG_CONFIG_HOME/easyi18n/`, else `~/.config/easyi18n/`, and in
+  `%APPDATA%\easyi18n\` on Windows; `easyi18n login` writes it. A blank
+  `EASYI18N_TOKEN`, or the `eik_YOUR_AGENT_KEY` placeholder that
+  `mcp config` prints, no longer hides the login. With no credential the
+  error names the origin and `easyi18n login`. A login the server refuses as
+  expired or signed out prints the server's message without the hint to
+  check `EASYI18N_TOKEN`. `doctor`'s `credential` line names the login, its
+  email and its expiry.
+- Web: `doctor` grades the i18next ICU wiring per instance. In an app with
+  a client and a server instance, such as Remix with remix-i18next, it said
+  `ok` for the first file that registered `i18next-icu` while the server
+  rendered ICU as raw text. Now each file that registers i18next plugins
+  without `i18next-icu` gets a `warn` that names it, with no `ok`, and
+  `wiring` fails only when no file registers the plugin. A `plugins: [...]`
+  or `use: [...]` list counts as registering it, so next-i18next wired as its
+  README shows no longer fails. The wiring `init` prints says that every
+  instance, the server's included, registers ICU.
+- Angular: `doctor` reads `messages.json` as Angular's format. `source`
+  counts the ids under `translations`, where it counted `locale` as a key,
+  and a config that says `json` or `nested_json` fails with
+  `set format: angular_json`, where it told the agent to set `nested_json`,
+  which the server refuses. A new `ids` check warns when a message has no
+  `@@id`: its id is a digest of the text, so editing the text starts its
+  translation over; a plural or select is left out, since one nested in a
+  message takes no `@@id` and the file does not tell it apart from a whole
+  message that does. `sync_preview` lists the `{$…}` tokens of the file in
+  `protected_tokens`, and the MCP `authorize` counts the ids of the file: it
+  counted none, which the server refuses. The `setup` and `translate`
+  prompts, the server instructions, the `AGENTS.md` block and the plugin
+  skills name the Angular branch.
+- `init` without `--stack` sets up the stack `doctor` checks: the detected
+  one, else the one an existing `easyi18n.yaml` declares, else `flutter`. It
+  set up `flutter` every time, so in a web, Xcode, Android or Angular project
+  it wrote a Flutter Mode B config without `source:`, and the bare
+  `easyi18n init` that `doctor` names to rewrite `AGENTS.md` wrote the Flutter
+  block, which the next `doctor` reported as stale. A config the old default
+  already wrote stays until `init --force` rewrites it. A typed `--stack`,
+  `auto` included, and the MCP `init` tool are unchanged.
+- Angular: a new `angular` stack, also a value of the MCP `init` tool's
+  `stack`. `init --stack auto` detects an app with `@angular/localize` in
+  `package.json` and an `angular.json`, and writes `format: angular_json`,
+  `source: src/locale/messages.json` and `output: src/locale`. Its steps
+  name `ng extract-i18n --format=json --output-path=src/locale` and the
+  wiring: `loadTranslations` when the package is under `dependencies`
+  (runtime), `i18n` and `localize` in `angular.json` when it is under
+  `devDependencies` (build time). `sync` uploads `messages.json` and leaves
+  out the `messages.<locale>.json` files that `pull` writes beside it.
+  Under `auto`, an app that also uses Transloco, ngx-translate or i18next
+  is refused with `ambiguous_stack` until `--stack angular` or `--stack web`
+  picks one, and an Ionic or Capacitor app with `@angular/localize` and
+  `android/` is `angular`, where it was `android`.
+- Web: `doctor` fails `source` when the sync of its config would refuse the
+  input: a second base-language file under `sourceLayout: locale-files` or
+  `base-tree` (`several_files_per_locale`), or a config without `sourceRoot`
+  and `sourceLayout` (`catalog_scope_unknown`). The message is the refusal
+  that `sync` and `sync_preview` print, and `doctor` exits with 1 where it
+  exited with 0. Under MCP the finding carries the `sourceLayout` remedy in
+  `details`, since a finding's message is cut at 200 characters.
+- The MCP tool descriptions name both credentials. `push`, `sync`,
+  `publish` and `rollback` send the agent to `authorize` first: with an API
+  key in `EASYI18N_TOKEN` it passes the approved `operation_id`, and when
+  `authorize` answers that none is needed, as it does for your login, the
+  call goes without one. They asked for an approved `operation_id` with any
+  credential. `authorize` says that with your login it creates nothing and
+  answers `not_needed` unless the server requires approval.
+  `add_language` takes your login as well as a key
+  with the `write` scope, and `status` says that without `easyi18n.yaml` it
+  names no project for your login.
+- A failed TLS handshake, such as a certificate the system does not trust,
+  is a connection failure, as a server that is down is: one line,
+  `error: Could not reach <base URL>: HandshakeException: …`, and exit 1;
+  with `--json` the `cli_error` record with `retryable: true`; over MCP the
+  same record. `status`, `pull`, `push`, `sync` and `login --no-browser`
+  ended in an unhandled exception with exit 255 and an empty `--json`
+  stdout, and the MCP `status` and `pull` answered `internal_error`. The
+  certificate is still checked.
+
+## 1.1.0
+
+- Flutter Mode B: `init` declares `android.permission.INTERNET` in
+  `android/app/src/main/AndroidManifest.xml`. `flutter create` declares it
+  for debug and profile builds only, so a release build never reached
+  delivery. `doctor` reads the main and release manifests and warns when
+  the permission is missing or removed with `tools:node="remove"`; exit
+  code 0, since a dependency can add it when Gradle merges the manifests.
+  The `### Flutter` block of `AGENTS.md` names it, so `doctor` reports that
+  block as stale until `init` rewrites it.
+- The MCP `authorize {operation_id}` waits for the human. While the
+  operation is pending it reads it again every 5 s and answers as soon as
+  the human approves or denies, or after 45 s with `next: wait`, so the
+  agent goes on without the human returning to the chat. A client that
+  sends a `progressToken` gets `notifications/progress` every 10 s. Ten
+  minutes after the server first saw the operation, the read answers at
+  once with `next: ask_human`; `EASYI18N_MCP_APPROVAL_WAIT_SECONDS` shortens
+  that. A denied operation answers `next: stop` and an expired one
+  `next: reauthorize`, where both used to answer `next: authorize`. The
+  instructions and the translate prompt tell the agent to keep calling in
+  the same turn.
+- Flutter Mode B: `init` writes `easyi18n: ^1.0.0`. It wrote `^0.2.0`,
+  which excludes the SDK 1.0.0. It also raises a `^0.2.x` that an earlier
+  init left, as it already raised a `^0.1.x`. `doctor` still passes a
+  `^0.2.x`, which resolves the SDK it checks for, and still fails a
+  `^0.1.x`.
+
 ## 1.0.0
 
 - The first stable version is 1.0.0, not 0.13.0. It follows 0.13.0-rc.6; a

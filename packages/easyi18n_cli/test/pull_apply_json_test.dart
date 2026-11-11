@@ -221,12 +221,12 @@ void main() {
         '--config', config, '--json', command, '--token', '',
       ]), 1);
       expect(payload()['error'], {
-        'message': command == 'pull'
-          ? 'No credential. Set EASYI18N_TOKEN or pass --token.\n'
-            'Create an API key in your project settings with read scope. '
-            'Adopting a missing format also requires write scope.'
-          : 'No credential. Set EASYI18N_TOKEN or pass --token.\n'
-            'Create an API key in your project settings (needs the read scope).',
+        'message': "No credential for https://api.easyi18n.com. Run 'easyi18n "
+          "login', set EASYI18N_TOKEN or pass --token.\n"
+          '${command == 'pull'
+            ? 'Create an API key in your project settings with read scope. '
+              'Adopting a missing format also requires write scope.'
+            : 'Create an API key in your project settings (needs the read scope).'}',
         'code': 'cli_error', 'statusCode': null, 'retryable': false,
       });
     });

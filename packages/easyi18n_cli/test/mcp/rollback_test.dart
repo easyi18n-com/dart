@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
+import '../support/stored_login.dart';
 import 'harness.dart';
 import 'server_test.dart' show errorOf, project;
 
@@ -49,8 +50,10 @@ void main() {
     String tool,
     Map<String, Object?> arguments, {
     String config = 'projectId: proj_abc\n',
+    Map<String, String> environment = const {'EASYI18N_TOKEN': 'eik_test'},
   }) async {
-    final fixture = project(config: config, httpClient: MockClient(backend));
+    final fixture = project(config: config, environment: environment,
+        httpClient: MockClient(backend));
     addTearDown(() => fixture.dir.deleteSync(recursive: true));
     final harness = await McpHarness.start(fixture.deps);
     addTearDown(harness.shutdown);
@@ -62,6 +65,38 @@ void main() {
 
   Map<String, Object?> bodyOf(http.Request request) =>
       (jsonDecode(request.body) as Map).cast<String, Object?>();
+
+  // Decision 1 of #2579: the MCP that inherits the login rolls back as its
+  // human. A key in EASYI18N_TOKEN keeps D17, and a server that makes the
+  // login ask after all answers 403, which reads as today's remedy.
+  group('with the stored login', () {
+    test('rollback goes without operation_id, as the login', () async {
+      final result = await call('rollback', {'version': '2026.09.22.2'}, environment: loggedInHome());
+      expect(result.isError, isNot(true), reason: '${result.structuredContent}');
+      expect(restoreRequest().headers['authorization'], 'Bearer eip_login');
+      expect(bodyOf(restoreRequest()), isNot(contains('operationId')));
+      expect(requests.where((r) => r.url.path.contains('/operations')), isEmpty);
+    });
+
+    test('a key in EASYI18N_TOKEN still needs the operation', () async {
+      final result = await call('rollback', {'version': '2026.09.22.2'},
+          environment: loggedInHome(also: {'EASYI18N_TOKEN': 'eik_test'}));
+      expect(errorOf(result)['code'], 'authorization_required');
+      expect(requests, isEmpty);
+    });
+
+    test('a 403 authorization_required is the remedy without an operation',
+        () async {
+      restoreStatus = 403;
+      restored = {'error': 'authorization_required',
+        'message': 'this credential needs an approved operation'};
+      final result = await call('rollback', {'version': '2026.09.22.2'}, environment: loggedInHome());
+      expect(errorOf(result)['code'], 'authorization_required');
+      expect(errorOf(result)['message'], contains('authorize {action: rollback}'));
+      expect(errorOf(result)['statusCode'], 403);
+      expect(requests.where((r) => r.url.path.contains('/operations')), isEmpty);
+    });
+  });
 
   group('the approval is mandatory', () {
     test('rollback without operation_id refuses before any request', () async {

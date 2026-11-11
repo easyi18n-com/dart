@@ -73,6 +73,26 @@ void refuseUntrustedTarget(String baseUrl,
   }
 }
 
+/// D4's hosts for `login` (#2583): it opens the page the server names, and a
+/// planted `easyi18n.yaml` would open a fake one that asks for the password.
+void refuseUntrustedLogin(String baseUrl,
+    {required Map<String, String> environment}) {
+  final uri = Uri.tryParse(baseUrl);
+  if (uri != null && uri.host.isNotEmpty && (uri.isScheme('http') || uri.isScheme('https'))) {
+    if (_isLoopback(uri.host) ||
+        _sameOrigin(baseUrl, environment['EASYI18N_BASE_URL']) ||
+        (uri.isScheme('https') && uri.host == _defaultHost)) {
+      return;
+    }
+  }
+  throw FatalCliException(
+    'Refusing to log in to $baseUrl: only https://$_defaultHost, a loopback '
+    'address or the exact EASYI18N_BASE_URL can open a login page. Set '
+    'EASYI18N_BASE_URL to this origin if you trust it.',
+    code: 'untrusted_base_url',
+  );
+}
+
 /// Scheme, host and port must all match; a trailing slash is not a difference.
 bool _sameOrigin(String a, String? b) {
   if (b == null || b.trim().isEmpty) return false;

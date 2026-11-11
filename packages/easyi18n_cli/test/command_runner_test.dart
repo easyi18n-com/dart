@@ -2,12 +2,15 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
-import 'package:args/command_runner.dart' show UsageException;
+import 'package:args/command_runner.dart' show Command, UsageException;
 // Through the barrel, not `src/`: it is the package's public surface, and
 // nothing else in the suite imports it, so a dropped `export` would otherwise
 // go unnoticed until an embedder hit it.
 import 'package:easyi18n_cli/easyi18n_cli.dart';
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
 import 'support/transcript.dart';
@@ -126,5 +129,63 @@ void main() {
       isEmpty,
       reason: 'usage does not go through the logger, so no sink records it',
     );
+  });
+
+  // #2583: the runner registers `login`, and it answers --json. The origin is
+  // one `login` refuses, so the run makes no call.
+  test('login answers through the real runner', () async {
+    final home = Directory.systemTemp.createTempSync('runner_login');
+    addTearDown(() => home.deleteSync(recursive: true));
+    final config = File(p.join(home.path, 'easyi18n.yaml'))
+      ..writeAsStringSync('projectId: p\nbaseUrl: https://evil.example\n');
+    final out = StringBuffer();
+    final code = await Easyi18nCommandRunner(
+            logger: CliLogger(out: out, err: StringBuffer()),
+            environment: {'HOME': home.path})
+        .run(['--config', config.path, 'login', '--json']);
+    expect(code, 1, reason: '$out');
+    expect((jsonDecode('$out') as Map)['error']['code'], 'untrusted_base_url');
+  });
+
+  // #2583: the runner registers the three commands of the login, with --json.
+  test('whoami and logout answer through the real runner', () async {
+    final home = Directory.systemTemp.createTempSync('runner_login');
+    addTearDown(() => home.deleteSync(recursive: true));
+    // Port 9 (discard): no listener, so logout's revocation never reaches one.
+    const origin = 'http://127.0.0.1:9';
+    final environment = {'HOME': home.path, 'EASYI18N_BASE_URL': origin};
+    File(p.join(home.path, '.config', 'easyi18n', 'credentials.json'))
+      ..createSync(recursive: true)
+      ..writeAsStringSync(jsonEncode({'version': 1, 'logins': {
+        origin: {'token': 'eip_a', 'email': 'dev@acme.test', 'expires_at': '2100-01-01T00:00:00Z'},
+      }}));
+    Future<(int?, Object?)> json(List<String> args) async {
+      final out = StringBuffer();
+      final code = await Easyi18nCommandRunner(
+              logger: CliLogger(out: out, err: StringBuffer()), environment: environment)
+          .run(['--config', p.join(home.path, 'none.yaml'), ...args, '--json']);
+      return (code, jsonDecode(out.toString()));
+    }
+
+    final (whoami, who) = await json(['whoami']);
+    expect(whoami, 0, reason: '$who');
+    expect((who as Map)['email'], 'dev@acme.test');
+    final (_, out) = await json(['logout']);
+    expect(out, {'base_url': origin, 'removed': true, 'revoked': null});
+  });
+
+  // #2583: every command that takes --token falls back to the stored login.
+  test('every --token help names the login after EASYI18N_TOKEN', () {
+    Iterable<Command<int>> all(Iterable<Command<int>> commands) =>
+        commands.toSet().expand((c) => [c, ...all(c.subcommands.values)]);
+    final helps = {
+      for (final c in all(Easyi18nCommandRunner().commands.values))
+        if (c.argParser.options['token'] case final token?)
+          '${c.parent?.name ?? ''} ${c.name}'.trim(): token.help,
+    };
+    expect(helps.keys, unorderedEquals(['apply', 'doctor', 'formats add',
+        'languages add', 'pull', 'push', 'rollback', 'status', 'sync']));
+    expect(helps.values,
+        everyElement(endsWith(r'Defaults to $EASYI18N_TOKEN, then your easyi18n login.')));
   });
 }

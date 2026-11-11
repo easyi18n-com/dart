@@ -69,17 +69,20 @@ final publishTool = McpTool(
   Tool(
     name: 'publish',
     description: 'Freeze the current translations into a new version and '
-        'serve it. Needs the operation_id of an approved '
-        'authorize {action: publish}: this is what readers see. The server '
-        'refuses an incomplete snapshot unless the human lowers '
-        'require_complete. Not undoable by itself; rollback is another '
-        'approval.',
+        'serve it: this is what readers see. Call authorize {action: publish} '
+        'first. With a key in EASYI18N_TOKEN, pass the operation_id it '
+        'returns once the human approves; when it answers that none is '
+        "needed, as it does for the human's easyi18n login, publish without "
+        'one. The server refuses an incomplete snapshot unless the human '
+        'lowers require_complete. Not undoable by itself; rollback goes '
+        'through authorize again.',
     annotations: ToolAnnotations(idempotentHint: false, openWorldHint: true),
     meta: Meta.fromMap({'anthropic/requiresUserInteraction': true}),
     inputSchema: toolSchema(
       properties: {
         'operation_id': Schema.string(
-          description: 'The approved publish operation. Always required.',
+          description: 'The approved publish operation. Required unless '
+              'authorize answered that none is needed.',
         ),
         ...publishInputs,
         'skip_if_identical': Schema.bool(
@@ -90,22 +93,22 @@ final publishTool = McpTool(
     ),
   ),
   (request, deps) async {
-    final operationId = stringArg(request, 'operation_id')?.trim();
-    if (operationId == null || operationId.isEmpty) {
-      return toolError(
-        'publish needs an approved operation: call '
-        'authorize {action: publish}, give the human the approval_url, and '
-        'publish with its operation_id once the state is approved.',
-        code: 'authorization_required',
-      );
-    }
+    final operationId = switch (stringArg(request, 'operation_id')?.trim()) {
+      null || '' => null,
+      final id => id,
+    };
     final configPath = deps.configPathFor(stringArg(request, 'project_dir'));
     final config = Easyi18nConfig.load(File(configPath), logger: deps.logger);
     refuseUntrustedTarget(config.baseUrl, environment: deps.environment);
+    // The login publishes as its human (decision 1 of #2579); a key needs
+    // the operation (D17).
+    if (operationId == null && !deps.usesLogin(config.baseUrl)) {
+      return _unapproved();
+    }
     final filters = publishFilters(request, config);
     return withProject(
       config: config,
-      token: deps.requireToken(scope: 'publish'),
+      token: deps.requireToken(config.baseUrl, scope: 'publish'),
       logger: deps.logger,
       apiClientFactory: deps.apiClientFactory,
       body: (client, projectId) async {
@@ -128,13 +131,23 @@ final publishTool = McpTool(
   },
 );
 
+/// A publish with no operation, refused here for a key or by the door for a
+/// login it makes ask.
+CallToolResult _unapproved({int? statusCode}) => toolError(
+  'publish needs an approved operation: call '
+  'authorize {action: publish}, give the human the approval_url, and '
+  'publish with its operation_id once the state is approved.',
+  code: 'authorization_required',
+  statusCode: statusCode,
+);
+
 /// The door's refusal, in the vocabulary the agent acts on. Anything this
 /// does not name keeps the API client's own code, so a 402 or a 500 still
 /// reads as itself.
 Future<CallToolResult> _refused(
   TranslationsApiClient client,
   ApiException error,
-  String operationId,
+  String? operationId,
   PublishFilters filters,
 ) async {
   switch (error.code) {
@@ -164,11 +177,13 @@ Future<CallToolResult> _refused(
         code: 'scope_changed',
         statusCode: error.statusCode,
       );
-    case 'authorization_required':
-    case 'operation_not_approved':
-    case 'operation_not_found':
+    case 'authorization_required' ||
+          'operation_not_approved' ||
+          'operation_not_found' when operationId != null:
       return approvalRefused(client, error, operationId,
           action: 'publish', second: 'a second version');
+    case 'authorization_required':
+      return _unapproved(statusCode: error.statusCode);
     default:
       return errorFrom(error);
   }

@@ -7,6 +7,7 @@ out|  created  <tmp>/assets/easyi18n/ - offline floor dir
 out|  patched  <tmp>/.gitignore - ignored .easyi18n/
 out|  patched  <tmp>/macos/Runner/DebugProfile.entitlements - granted com.apple.security.network.client
 out|  skipped  <tmp>/macos/Runner/Release.entitlements - no macOS target
+out|  skipped  <tmp>/android/app/src/main/AndroidManifest.xml - no Android target
 out|  patched  <tmp>/lib/main.dart - wrapped runApp in Easyi18nScope
 out|  patched  <tmp>/lib/main.dart - wired MaterialApp locales
 out|  created  <tmp>/AGENTS.md - easyi18n block

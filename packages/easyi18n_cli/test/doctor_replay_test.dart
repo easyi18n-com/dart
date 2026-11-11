@@ -30,7 +30,7 @@ void main() {
       expect(err.toString(), isEmpty);
       expect(out.toString().replaceAll(dir.path, '<ROOT>'), '''
 ok    <ROOT>/easyi18n.yaml - project p (Mode A: TMS)
-warn  credential - EASYI18N_TOKEN not set - 'easyi18n push/pull' will need it
+warn  credential - not logged in and EASYI18N_TOKEN not set - run 'easyi18n login'
 warn  <ROOT>/AGENTS.md - no easyi18n block - run 'easyi18n init' so agents without MCP read the loop and the credit rules
 info  mode - runtime wiring checks not applicable (Mode A: pubspec dependency, assets floor, entitlements, Easyi18nScope)
 info  mode - if this project's dashboard Settings has not been set to Mode A yet, do that too - it picks the right publish defaults
@@ -48,7 +48,7 @@ ok    scan - 1 file(s), 12 extractable tr() string(s)
   ... and 2 more
 FAIL  icu - 12 ICU problem(s) - a malformed string renders RAW to users
 info  delivery - not applicable (Mode A pulls files, no OTA runtime)
-info  completeness - could not verify: EASYI18N_TOKEN not set (a key with the read scope grades it)
+info  completeness - could not verify: not logged in and EASYI18N_TOKEN not set (a login or a key with the read scope grades it)
 1 problem(s), 2 warning(s). 1 check(s) could not run - see `info` above. Most local issues are fixed by 'easyi18n init'.
 ''');
     } finally { dir.deleteSync(recursive: true); }

@@ -11,6 +11,7 @@ import '../exceptions.dart';
 import '../init_report.dart';
 import '../state.dart';
 import '../sync_runner.dart' show SyncRunner;
+import 'angular_adapter.dart' show angularMessages, kAngularFormat;
 import 'stack_adapter.dart';
 
 /// An i18n library the web adapter recognizes: the dependency that detects
@@ -76,14 +77,18 @@ import i18next from 'i18next';
 import ICU from 'i18next-icu';
 
 i18next.use(ICU).init({ /* your config */ });
+
+// Every instance registers it, the ones the server creates too:
+// createInstance().use(ICU).init(...), plugins: [ICU] or use: [ICU].
 ''',
     provider: 'i18next.use(ICU)',
-    // `ICU` is whatever the file calls its import, so `.use()` has to receive
-    // the name that file bound to the package. The leading `\b` keeps the
-    // search linear: without it one 60,000-character word (an inlined font)
-    // took 39 seconds.
+    // `ICU` is whatever the file calls its import, so `.use()` or the plugin
+    // list (remix-i18next, next-i18next) has to name what that file bound to
+    // the package. The leading `\b` keeps the search linear: without it one
+    // 60,000-character word (an inlined font) took 39 seconds.
     wired: r'''\b(\w+)(?:\s+from\s*|\s*=\s*require\(\s*)['"]i18next-icu['"]'''
-        r'''[\s\S]*?\.use\(\s*(?:new\s+)?\1\b''',
+        r'''[\s\S]*?(?:\.use\(\s*(?:new\s+)?\1\b|'''
+        r'''\b(?:plugins|use)\s*:\s*\[[^\]]*?\b\1\b)''',
   ),
 ];
 
@@ -263,8 +268,7 @@ class WebAdapter implements StackAdapter {
   @override
   Future<void> doctorChecks({required String root, required String sourcePath,
       required Easyi18nConfig config, required DoctorFindings findings}) async {
-    final parts = _checkSource(root, config, findings);
-    _checkTargets(root, config, parts, findings);
+    checkLocaleFiles(root, config, findings);
     final manifest = p.join(root, 'package.json');
     final library = libraryIn(root);
     if (library == null) {
@@ -275,6 +279,13 @@ class WebAdapter implements StackAdapter {
     }
     _checkTranspiler(root, manifest, library, findings);
     _checkWiring(root, library, findings);
+  }
+
+  /// The `source` and `targets` checks, which read only the files.
+  void checkLocaleFiles(
+      String root, Easyi18nConfig config, DoctorFindings findings) {
+    final parts = _checkSource(root, config, findings);
+    _checkTargets(root, config, parts, findings);
   }
 
   /// The base files of a merged layout once they all pass, else null.
@@ -300,6 +311,16 @@ class WebAdapter implements StackAdapter {
     if (mergedLayouts.contains(config.sourceLayout)) {
       return _checkParts(root, path, config, findings);
     }
+    // Sync selects its input before the server reads a byte (#2456).
+    try {
+      SyncRunner.inputParts(path, root: root, config: config,
+          baseCode: p.basenameWithoutExtension(path));
+    } on CliException catch (e) {
+      findings.fail('source', path, e.message, details: [
+        if (e.code == 'several_files_per_locale') SyncRunner.oneCatalogRemedy,
+      ]);
+      return null;
+    }
     if (decoded is! Map) {
       findings.fail('source', path,
           'not a JSON object of keys - sync would upload it and the server '
@@ -307,20 +328,25 @@ class WebAdapter implements StackAdapter {
       return null;
     }
     // The server names the format from the bytes and refuses a sync that
-    // declares the other one (`format_mismatch`), in both directions.
+    // declares another one (`format_mismatch`), in every direction.
+    final angular = angularMessages(decoded);
     final nesting = _nestingKey(decoded);
-    final shape = nesting == null ? 'json' : 'nested_json';
+    final shape = angular != null
+        ? kAngularFormat
+        : nesting == null ? 'json' : 'nested_json';
     if (_jsonFormats.contains(config.format) && config.format != shape) {
-      final found = nesting == null
-          ? 'the file is flat'
-          : 'the file nests (`$nesting` holds an object)';
+      final found = angular != null
+          ? 'the file is Angular\'s (`locale` and `translations`)'
+          : nesting == null
+              ? 'the file is flat'
+              : 'the file nests (`$nesting` holds an object)';
       findings.fail('source', path,
           '$found, which is $shape, and ${Easyi18nConfig.fileName} says '
           '${config.format} - the server refuses that sync; set '
           '`format: $shape`');
       return null;
     }
-    findings.ok('source', path, '${_leaves(decoded)} key(s)');
+    findings.ok('source', path, '${angular?.length ?? _leaves(decoded)} key(s)');
     return null;
   }
 
@@ -475,9 +501,14 @@ class WebAdapter implements StackAdapter {
   /// Looks for the plugin's wiring in every source file of the app rather
   /// than in one conventional file: an NgModule app, an Nx workspace and
   /// i18next each keep it somewhere else, and a `fail` for a wiring that
-  /// exists stops the setup that reads this report.
+  /// exists stops the setup that reads this report. i18next is graded per
+  /// instance: each formats with the plugins it registered, so a server that
+  /// creates its own renders raw ICU beside a wired client (#2574).
   void _checkWiring(String root, WebLibrary library, DoctorFindings findings) {
     final wired = RegExp(library.wired);
+    final perInstance = library.dependency == 'i18next';
+    final wiredIn = <String>[];
+    final unwired = <String>[];
     var read = 0;
     for (final file in _sourcesIn(Directory(root))) {
       final String source;
@@ -487,22 +518,153 @@ class WebAdapter implements StackAdapter {
         continue;
       }
       read++;
+      // An empty literal in place of the others keeps an import from
+      // reading on into the next one.
       final code = source.replaceAllMapped(_nonCode, (match) {
         final literal = match[1];
-        return library.dependency == 'i18next' &&
-            (literal == "'i18next-icu'" || literal == '"i18next-icu"')
-            ? literal! : ' ';
+        if (!perInstance || literal == null) return ' ';
+        return _i18nextPackage.hasMatch(literal) ? literal : '""';
       });
       if (wired.hasMatch(code)) {
-        findings.ok('wiring', file.path, '${library.provider} wired');
-        return;
+        if (!perInstance) {
+          findings.ok('wiring', file.path, '${library.provider} wired');
+          return;
+        }
+        wiredIn.add(file.path);
+      } else if (perInstance && _registersPlugins(code)) {
+        unwired.add(file.path);
       }
     }
-    findings.fail('wiring', root,
-        '${library.provider} not found in $read source file(s) - '
-        '${library.dependency} shows ICU as raw text until '
-        '${library.transpiler.first} is wired',
-        details: const LineSplitter().convert(library.wiring));
+    if (wiredIn.isEmpty) {
+      findings.fail('wiring', root,
+          '${library.provider} not found in $read source file(s) - '
+          '${library.dependency} shows ICU as raw text until '
+          '${library.transpiler.first} is wired',
+          details: const LineSplitter().convert(library.wiring));
+      return;
+    }
+    // A warning: an instance is read from one file's text, and a test setup
+    // without the plugin reads the same as a server.
+    for (final path in unwired) {
+      findings.warn('wiring', path,
+          'registers i18next plugins without ${library.transpiler.first} - '
+          'this instance shows ICU as raw text until it registers it too, '
+          'with .use(ICU) or in its plugins: list');
+    }
+    if (unwired.isNotEmpty) return;
+    if (wiredIn.length == 1) {
+      findings.ok('wiring', wiredIn.single, '${library.provider} wired');
+    } else {
+      findings.ok('wiring', root,
+          '${library.provider} wired in ${wiredIn.length} files',
+          details: [for (final path in wiredIn) p.relative(path, from: root)]);
+    }
+  }
+
+  static final RegExp _i18nextPackage =
+      RegExp(r'''^(['"])(?:react-)?i18next(?:-[\w.-]+)?\1$''');
+  // A clause ends before the next `import`: read on to the end of the words
+  // after each one, JSX text made the search quadratic.
+  static final RegExp _importsI18next = RegExp(
+      r'''\bimport\s+((?:(?!\bimport\b)[\w$,{}\s*])+?)\s*from\s*['"]i18next['"]|'''
+      r'''(?<![\w$])(\{[^}]+\}|[\w$]+)\s*=\s*require\(\s*['"]i18next['"]''');
+  static final RegExp _i18nextImport = RegExp(
+      r'''\bimport\s+((?:(?!\bimport\b)[\w$,{}\s*])+?)\s*from\s*['"](?:react-)?i18next(?:-[\w.-]+)?['"]|'''
+      r'''\b([\w$]+)\s*=\s*require\(\s*['"](?:react-)?i18next(?:-[\w.-]+)?['"]''');
+  static final RegExp _pluginList =
+      RegExp(r'\b(?:plugins|use)\s*:\s*\[([^\]]*)\]');
+  static final RegExp _name = RegExp(r'[\w$]+');
+
+  /// Whether [code] registers plugins on an i18next instance of its own: it
+  /// imports i18next and chains `.use()` into `.init(`, or its `plugins:` or
+  /// `use:` list holds what an i18next package exports. Imports are not
+  /// followed, so a chain on an instance from another module is not one.
+  static bool _registersPlugins(String code) {
+    if (_importsI18next.hasMatch(code) && _chainsToInit(code)) return true;
+    final plugins = {
+      for (final clause in _i18nextImport.allMatches(code))
+        for (final name in _name.allMatches(clause[1] ?? clause[2]!)) name[0],
+    };
+    return _pluginList.allMatches(code).any((list) =>
+        _name.allMatches(list[1]!).any((name) => plugins.contains(name[0])));
+  }
+
+  // Start at a local i18next binding, not every suffix of its use chain:
+  // revisiting those suffixes makes a long chain without init quadratic.
+  static Iterable<Match> _instanceUses(String code, Map<int, int> closing) sync* {
+    final instances = <String>{};
+    final factories = <String>{};
+    for (final imported in _importsI18next.allMatches(code)) {
+      final clause = imported[1] ?? imported[2]!;
+      final binding = RegExp(r'^\s*(?:\*\s+as\s+)?([\w$]+)|'
+          r'\bdefault\s*(?:as\s+|:\s*)([\w$]+)').firstMatch(clause);
+      final instance = binding?[1] ?? binding?[2];
+      if (instance != null) instances.add(instance);
+      final factory = RegExp(r'\bcreateInstance\b(?:\s*(?:as\s+|:\s*)([\w$]+))?')
+          .firstMatch(clause);
+      if (factory != null) factories.add(factory[1] ?? 'createInstance');
+    }
+    final calls = [
+      ...factories.map(RegExp.escape),
+      for (final name in instances)
+        '${RegExp.escape(name)}\\s*\\.\\s*createInstance',
+    ].join('|');
+    if (calls.isNotEmpty) {
+      // A TypeScript annotation, kept to its line: `const server: i18n = ...`.
+      final assigned = RegExp('(?<![\\w\$])([\\w\$]+)\\s*'
+          '(?::[\\w\$.<>\\[\\]|& \\t]*)?=\\s*(?:$calls)\\s*\\(');
+      instances.addAll(assigned.allMatches(code).map((match) => match[1]!));
+    }
+    final receivers = [
+      if (calls.isNotEmpty) '(?:$calls)\\s*(\\()',
+      ...instances.map(RegExp.escape),
+    ];
+    if (receivers.isEmpty) return;
+    final start = RegExp('(?<![\\w\$\\.])(?:${receivers.join('|')})');
+    for (final match in start.allMatches(code)) {
+      final at = calls.isNotEmpty && match[1] != null
+          ? closing[match.end - 1] : match.end;
+      if (at == null) continue;
+      final link = _link.matchAsPrefix(code, at);
+      if (link != null && link[1] == 'use') yield link;
+    }
+  }
+
+  static final RegExp _link = RegExp(r'\s*\.\s*(use|init)\s*\(');
+
+  /// Whether a `.use()` chain in [code] reaches `.init(`, past the arguments
+  /// of each link: a backend's loader nests parentheses of its own.
+  static bool _chainsToInit(String code) {
+    final closing = _closingParens(code);
+    for (final use in _instanceUses(code, closing)) {
+      var at = use.start;
+      for (var link = _link.matchAsPrefix(code, at);
+          link != null;
+          link = _link.matchAsPrefix(code, at)) {
+        if (link[1] == 'init') return true;
+        final end = closing[link.end - 1];
+        if (end == null) break;
+        at = end;
+      }
+    }
+    return false;
+  }
+
+  /// The index after the `)` that closes each `(`, keyed by the `(`. One
+  /// pass: a `(` no `)` closes, as in a regex literal, made a scan from each
+  /// `.use(` read to the end of the file.
+  static Map<int, int> _closingParens(String code) {
+    final open = <int>[];
+    final closing = <int, int>{};
+    for (var i = 0; i < code.length; i++) {
+      final unit = code.codeUnitAt(i);
+      if (unit == 0x28) {
+        open.add(i);
+      } else if (unit == 0x29 && open.isNotEmpty) {
+        closing[open.removeLast()] = i + 1;
+      }
+    }
+    return closing;
   }
 
   /// The one check that needs the project, so `DoctorRunner` runs it with the
@@ -738,7 +900,7 @@ class WebAdapter implements StackAdapter {
     return decoded is Map && _nestingKey(decoded) != null;
   }
 
-  static const Set<String> _jsonFormats = {'json', 'nested_json'};
+  static const Set<String> _jsonFormats = {'json', 'nested_json', kAngularFormat};
 
   /// The first key that makes [catalog] `nested_json` for the server, or
   /// null for a flat file. Its rule, not ours (`parser_registry.dart`): an

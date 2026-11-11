@@ -12,6 +12,7 @@ import 'dart:io';
 
 import 'package:easyi18n_cli/src/mcp/client_config.dart';
 import 'package:easyi18n_cli/src/mcp/prompts.dart';
+import 'package:easyi18n_cli/src/version.dart';
 import 'package:path/path.dart' as p;
 
 const integrationsRoot = '../../integrations/agents';
@@ -34,18 +35,19 @@ String renderClientsReadme() {
     ..writeln(
       'runs the Dart package after `dart pub global activate easyi18n_cli`.',
     )
-    ..writeln('`$keyPlaceholder` stands for an AI agent key, created in the')
-    ..writeln(
-      'dashboard: every spend, publish and rollback it makes waits for a',
-    )
-    ..writeln('human approval.');
+    ..writeln('By default the server sends the login `easyi18n login` stored')
+    ..writeln('on the machine where it runs, and needs no key.')
+    ..writeln('`easyi18n mcp config --client <client> --agent-key` prints where')
+    ..writeln('to supply an AI agent key created in the dashboard. Replace')
+    ..writeln('`$keyPlaceholder` wherever it appears. The generated command uses')
+    ..writeln('`--require-agent-key` and refuses to start without a key.');
   for (final client in McpClient.values) {
     final fence = _fences[client.format]!;
     out
       ..writeln()
       ..writeln('## ${client.label} (`${client.id}`)')
       ..writeln()
-      ..writeln(client.target)
+      ..writeln(client.target())
       ..writeln()
       ..writeln('```$fence')
       ..writeln(client.snippet(McpRunner.npx))
@@ -60,6 +62,60 @@ String renderClientsReadme() {
   return out.toString();
 }
 
+// The MCP Registry refuses a description over 100 characters.
+const _listingDescription =
+    'Set up easyi18n in a Flutter, Xcode, Angular, web or Android project, '
+    'then translate and publish.';
+
+String _manifest(Map<String, Object?> json) =>
+    '${const JsonEncoder.withIndent('  ').convert(json)}\n';
+
+/// The Gemini CLI extension. Its gallery indexes a public repository that has
+/// this file at its root, which is the root of the mirror. Gemini CLI shows the
+/// server under the extension's name, so the key does not repeat it.
+String renderGeminiExtension() => _manifest({
+  'name': 'easyi18n',
+  'version': packageVersion,
+  'description': _listingDescription,
+  'mcpServers': {
+    'cli': {
+      'command': McpRunner.npx.argv.first,
+      'args': McpRunner.npx.argv.sublist(1),
+    },
+  },
+});
+
+/// The MCP Registry entry `mcp-publisher publish` reads. The registry checks
+/// `name` against `mcpName` in the published npm package.json, which
+/// scripts/test_agents_launcher.py ties to this file.
+String renderRegistryServer() => _manifest({
+  r'$schema':
+      'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json',
+  'name': 'com.easyi18n/cli',
+  'title': 'easyi18n',
+  'description': _listingDescription,
+  'repository': {
+    'url': 'https://github.com/easyi18n-com/agents',
+    'source': 'github',
+    'subfolder': 'npm',
+  },
+  'websiteUrl': 'https://docs.easyi18n.com/developers/agents',
+  'version': packageVersion,
+  'packages': [
+    {
+      'registryType': 'npm',
+      'identifier': npmPackage,
+      'version': packageVersion,
+      'transport': {'type': 'stdio'},
+      'packageArguments': [
+        // What follows the package in `npx -y <package>@<version> ...`.
+        for (final arg in McpRunner.npx.argv.skip(3))
+          {'type': 'positional', 'value': arg},
+      ],
+    },
+  ],
+});
+
 typedef AgentSkill = ({String name, String description, String text});
 
 const _skillsDir = 'claude-code/skills';
@@ -69,10 +125,10 @@ const _skillsDir = 'claude-code/skills';
 const _skillDescriptions = {
   'setup':
       'Set up easyi18n in this repository: detect the stack (Flutter, Xcode, '
-      'web or Android), wire up the SDK and config, convert user-facing '
-      'strings and show what would be translated. Use when the user wants to '
-      'add easyi18n, internationalize or localize an app, or connect a '
-      'project to easyi18n.',
+      'Angular, web or Android), wire up the SDK and config, convert '
+      'user-facing strings and show what would be translated. Use when the '
+      'user wants to add easyi18n, internationalize or localize an app, or '
+      'connect a project to easyi18n.',
   'translate':
       'Translate and publish with easyi18n: preview the credit spend, get '
       'the human approval in the dashboard, wait for the fill, publish and '
@@ -85,7 +141,7 @@ const _skillDescriptions = {
 List<AgentSkill> agentSkills([List<McpPrompt>? prompts]) => [
   for (final (:prompt, :text) in prompts ?? mcpPrompts)
     (
-      name: 'easyi18n-${prompt.name}',
+      name: prompt.name,
       description:
           _skillDescriptions[prompt.name] ??
           (throw StateError('MCP prompt ${prompt.name} has no skill trigger')),
@@ -112,6 +168,8 @@ String renderSkill(AgentSkill skill) {
 /// Every generated file, keyed by its path under [integrationsRoot].
 Map<String, String> renderIntegrations() => {
   'clients/README.md': renderClientsReadme(),
+  'gemini-extension.json': renderGeminiExtension(),
+  'server.json': renderRegistryServer(),
   for (final skill in agentSkills())
     '$_skillsDir/${skill.name}/SKILL.md': renderSkill(skill),
 };

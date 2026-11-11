@@ -21,6 +21,9 @@ List<String> _blocks(String page) => [
   for (final m in _fence.allMatches(page.replaceAll('\r\n', '\n'))) m[1]!,
 ];
 
+String pageSnippet(McpClient client, McpRunner runner, {required bool agentKey}) =>
+    client.snippet(runner, agentKey: agentKey);
+
 void main() {
   late List<String> blocks;
   setUpAll(() => blocks = _blocks(File(pagePath).readAsStringSync()));
@@ -29,10 +32,10 @@ void main() {
     for (final client in McpClient.values) {
       expect(
         blocks,
-        contains(client.snippet(McpRunner.npx)),
+        contains(pageSnippet(client, McpRunner.npx, agentKey: true)),
         reason:
             '${client.id}: run `easyi18n mcp config --client '
-            '${client.id}` and paste its snippet',
+            '${client.id} --agent-key` and paste its snippet',
       );
     }
   });
@@ -40,7 +43,9 @@ void main() {
   test('every server snippet on the page is one `mcp config` prints', () {
     final printed = {
       for (final client in McpClient.values)
-        for (final runner in McpRunner.values) client.snippet(runner),
+        for (final runner in McpRunner.values)
+          for (final agentKey in [false, true])
+            pageSnippet(client, runner, agentKey: agentKey),
     };
     // What each runner launches: the argument before `mcp`.
     final launched = [

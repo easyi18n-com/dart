@@ -218,8 +218,12 @@ void main() {
       final details = stepsOf(result).map((s) => s['detail']).join('\n');
       expect(details, contains('i18next-icu'));
       expect(details, contains('intl-messageformat'));
-      expect(result.structuredContent!['scope_snippet'],
-          contains('i18next.use(ICU)'));
+      final snippet = result.structuredContent!['scope_snippet'];
+      expect(snippet, contains('i18next.use(ICU)'));
+      // A server instance of its own needs the plugin too (#2574).
+      expect(snippet, contains('Every instance registers it'));
+      expect(snippet, contains('createInstance().use(ICU)'));
+      expect(snippet, contains('plugins: [ICU]'));
     });
 
     test('ngx-translate under devDependencies names its compiler', () async {
@@ -571,7 +575,7 @@ void main() {
         expect(result.isError, isTrue);
         final error = errorOf(result);
         expect(error['code'], 'unsupported_stack');
-        expect(error['supported'], ['flutter', 'xcode', 'web', 'android']);
+        expect(error['supported'], ['flutter', 'xcode', 'web', 'android', 'angular']);
         // Web is supported through its catalogs; reading `t()` calls out of the
         // source is still to come, and the list says so.
         expect(error['roadmap'], ['web t() extraction', 'gettext']);
@@ -611,7 +615,7 @@ void main() {
       expect(result.isError, isTrue);
       final error = errorOf(result);
       expect(error['code'], 'unsupported_stack');
-      expect(error['supported'], ['flutter', 'xcode', 'web', 'android']);
+      expect(error['supported'], ['flutter', 'xcode', 'web', 'android', 'angular']);
       expect(error['roadmap'], ['web t() extraction', 'gettext']);
       expect(error['message'],
           agentRefusal('No web project found at ${dir.path}'));
@@ -1365,6 +1369,331 @@ export const appConfig = {
         expect(finding(report, 'wiring')['level'], 'fail');
       });
 
+      // The three instances of Remix 2 with remix-i18next 6 (#2574): each
+      // formats with the plugins it registered.
+      group('i18next graded per instance', () {
+        final package = _package({
+          'i18next': '^23.16.8',
+          'i18next-icu': '^2.6.1',
+          'intl-messageformat': '^12.1.4',
+        });
+        const client = '''
+import i18next from "i18next";
+import ICU from "i18next-icu";
+import Backend from "i18next-http-backend";
+import { initReactI18next } from "react-i18next";
+
+await i18next
+  .use(initReactI18next)
+  .use(ICU)
+  .use(Backend)
+  .init({ backend: { loadPath: "/locales/{{lng}}/{{ns}}.json" } });
+''';
+        const entryServer = '''
+import { createInstance } from "i18next";
+import Backend from "i18next-fs-backend";
+import ICU from "i18next-icu";
+import { initReactI18next } from "react-i18next";
+import i18next from "./i18next.server";
+
+export default async function handleRequest(request: Request) {
+  const instance = createInstance();
+  const lng = await i18next.getLocale(request);
+  await instance
+    .use(initReactI18next)
+    .use(ICU)
+    .use(Backend)
+    .init({ lng, backend: { loadPath: resolve("./locales/{{lng}}.json") } });
+}
+''';
+        const remixServer = '''
+import Backend from "i18next-fs-backend";
+import ICU from "i18next-icu";
+import { RemixI18Next } from "remix-i18next/server";
+
+const i18next = new RemixI18Next({
+  detection: { supportedLanguages: ["en", "es"], fallbackLanguage: "en" },
+  plugins: [Backend, ICU],
+});
+export default i18next;
+''';
+        String unwired(String file) => file
+            .replaceFirst('import ICU from "i18next-icu";\n', '')
+            .replaceFirst('  .use(ICU)\n', '')
+            .replaceFirst('[Backend, ICU]', '[Backend]');
+        final remix = {
+          'package.json': package,
+          'locales/en.json': '{}',
+          'app/entry.client.tsx': client,
+          'app/entry.server.tsx': entryServer,
+          'app/i18next.server.ts': remixServer,
+          // Neither is an instance: a Vite plugin list, and an instance
+          // imported from the module that builds it.
+          'vite.config.ts': 'import { vitePlugin as remix } from '
+              '"@remix-run/dev";\nexport default defineConfig({ plugins: '
+              '[remix(), tsconfigPaths()] });\n',
+          'app/root.tsx': 'import i18next from "~/i18next.server";\n'
+              'export const loader = ({ request }) => i18next.getLocale(request);\n',
+        };
+        Future<List<Map<Object?, Object?>>> wiringOf(
+                Map<String, String> files) async =>
+            findings(await doctor(files, config: i18nextConfig), 'wiring');
+        String at(String path) => p.joinAll([dir.path, ...path.split('/')]);
+
+        test('a server without the plugin is a warning per instance, no ok',
+            () async {
+          final report = await doctor({
+            ...remix,
+            'app/entry.server.tsx': unwired(entryServer),
+            'app/i18next.server.ts': unwired(remixServer),
+          }, config: i18nextConfig);
+          final wiring = findings(report, 'wiring');
+          expect([for (final f in wiring) (f['level'], f['subject'])], [
+            ('warn', at('app/entry.server.tsx')),
+            ('warn', at('app/i18next.server.ts')),
+          ]);
+          for (final f in wiring) {
+            expect(f['message'], contains('i18next-icu'));
+            expect(f['message'], contains('raw text'));
+            expect((f['message'] as String).length, lessThan(200),
+                reason: 'MCP cuts a finding message at 200 characters');
+          }
+          expect(failures(report), 0);
+        });
+
+        for (final entry in {
+          'app/entry.client.tsx': client,
+          'app/entry.server.tsx': entryServer,
+          'app/i18next.server.ts': remixServer,
+        }.entries) {
+          test('${entry.key} alone without the plugin is the one warned',
+              () async {
+            final wiring =
+                await wiringOf({...remix, entry.key: unwired(entry.value)});
+            expect([for (final f in wiring) (f['level'], f['subject'])],
+                [('warn', at(entry.key))]);
+          });
+        }
+
+        test('every instance wired is one ok that lists the files', () async {
+          final wiring = await wiringOf(remix);
+          expect(wiring, hasLength(1));
+          expect(wiring.single['level'], 'ok');
+          expect(wiring.single['subject'], dir.path);
+          expect(wiring.single['message'], 'i18next.use(ICU) wired in 3 files');
+          expect(wiring.single['details'], [
+            'app/entry.client.tsx', 'app/entry.server.tsx',
+            'app/i18next.server.ts',
+          ]);
+        });
+
+        const middleware = '''
+import { initReactI18next } from "react-i18next";
+import { createI18nextMiddleware } from "remix-i18next/middleware";
+
+export const [i18nextMiddleware, getLocale] = createI18nextMiddleware({
+  detection: { supportedLanguages: ["es", "en"], fallbackLanguage: "en" },
+  plugins: [initReactI18next],
+});
+''';
+        for (final entry in {
+          'a remix-i18next 8 middleware': middleware,
+          'a next-i18next config with use:':
+              "import Backend from 'i18next-http-backend'\n"
+                  'export default { use: [Backend] }\n',
+          'a CommonJS chain': "const i18next = require('i18next');\n"
+              "const Backend = require('i18next-fs-backend');\n"
+              'i18next.use(Backend).init({});\n',
+          'a CommonJS plugin list':
+              "const Backend = require('i18next-fs-backend');\n"
+                  'module.exports = new RemixI18Next({ plugins: [Backend] });\n',
+        }.entries) {
+          test('${entry.key} without the plugin is warned', () async {
+            final wiring = await wiringOf({
+              'package.json': package,
+              'locales/en.json': '{}',
+              'app/entry.client.tsx': client,
+              'app/middleware/i18next.ts': entry.value,
+            });
+            expect([for (final f in wiring) (f['level'], f['subject'])],
+                [('warn', at('app/middleware/i18next.ts'))]);
+          });
+        }
+
+        // Without semicolons, a blanked specifier would let the first import
+        // read on into the i18next one and lend it `react`.
+        test('an import does not read into the next one', () async {
+          final wiring = await wiringOf({
+            'package.json': package,
+            'locales/en.json': '{}',
+            'app/entry.client.tsx': client,
+            'vite.config.ts': "import react from '@vitejs/plugin-react'\n"
+                "import ICU from 'i18next-icu'\n"
+                'export default defineConfig({ plugins: [react()] })\n',
+          });
+          expect([for (final f in wiring) (f['level'], f['subject'])],
+              [('ok', at('app/entry.client.tsx'))]);
+        });
+
+        test('ICU in a use: list wires next-i18next as its README does',
+            () async {
+          final wiring = await wiringOf({
+            'package.json': package,
+            'locales/en.json': '{}',
+            'i18n.config.ts': "import ICU from 'i18next-icu'\n"
+                "const i18nConfig = { supportedLngs: ['en', 'es'], use: [ICU] }\n"
+                'export default i18nConfig\n',
+            'app/[lng]/layout.tsx':
+                "import { initServerI18next } from 'next-i18next/server'\n"
+                "import i18nConfig from '../../i18n.config'\n"
+                'initServerI18next(i18nConfig)\n',
+          });
+          expect([for (final f in wiring) (f['level'], f['subject'])],
+              [('ok', at('i18n.config.ts'))]);
+        });
+
+        for (final entry in {
+          'a .use() that never reaches init':
+              "import i18next from 'i18next';\n"
+                  "import Backend from 'i18next-http-backend';\n"
+                  'i18next.use(Backend);\n',
+          'a chain on an instance another module exports':
+              "import i18n from './i18n';\n"
+                  "import { initReactI18next } from 'react-i18next';\n"
+                  'i18n.use(initReactI18next).init({});\n',
+          'an instance without plugins': "import i18next from 'i18next';\n"
+              'i18next.init({});\n',
+          'an imported helper beside an unrelated chain':
+              "import { t } from 'i18next';\n"
+                  'tool\n  .use(plugin).init({});\n',
+          'an unclosed factory':
+              "import { createInstance } from 'i18next';\ncreateInstance(\n",
+          'an unrelated property named like the import':
+              "import i18next from 'i18next';\n"
+                  'tool.i18next.use(plugin).init({});\n',
+          'a .use( left open': "import i18next from 'i18next';\n"
+              'i18next.use(Backend\n',
+          'a ) no ( opened': "import i18next from 'i18next';\n"
+              r'const close = /\)/;' '\ni18next.use(Backend);\n',
+        }.entries) {
+          test('${entry.key} is not an instance', () async {
+            final wiring = await wiringOf({
+              'package.json': package,
+              'locales/en.json': '{}',
+              'src/i18n.ts': client,
+              'src/setup.ts': entry.value,
+            });
+            expect([for (final f in wiring) (f['level'], f['subject'])],
+                [('ok', at('src/i18n.ts'))]);
+          });
+        }
+
+        // A regex literal is code, so its `(` is never closed: scanning for
+        // the closing parenthesis from each `.use(` took 7 seconds over
+        // 390 KB. Synchronous, so the elapsed time is the assertion.
+        test('an unclosed parenthesis before many .use( does not stall doctor',
+            () async {
+          final watch = Stopwatch()..start();
+          final wiring = await wiringOf({
+            'package.json': package,
+            'locales/en.json': '{}',
+            'src/i18n.ts': client,
+            'src/vendor.js':
+                "import i18next from 'i18next';\n${r'i18next.use(/\(/);' '\n' * 12000}",
+          });
+          expect([for (final f in wiring) (f['level'], f['subject'])],
+              [('ok', at('src/i18n.ts'))]);
+          expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+        });
+
+        test('an unrelated chain beside an i18next import is not an instance',
+            () async {
+          final wiring = await wiringOf({
+            'package.json': package,
+            'locales/en.json': '{}',
+            'src/i18n.ts': client,
+            'src/tool.ts': "import i18next from 'i18next';\n"
+                "import tool from './toolkit';\n"
+                'tool.use(plugin).init({});\n'
+                'export const language = i18next.language;\n',
+          });
+          expect([for (final f in wiring) (f['level'], f['subject'])],
+              [('ok', at('src/i18n.ts'))]);
+        });
+
+        test('a long closed use chain without init stays linear', () async {
+          final watch = Stopwatch()..start();
+          final wiring = await wiringOf({
+            'package.json': package,
+            'locales/en.json': '{}',
+            'src/i18n.ts': client,
+            'src/vendor.js': "import i18next from 'i18next';\n"
+                "i18next${'.use(Backend)' * 16000};\n",
+          });
+          expect([for (final f in wiring) (f['level'], f['subject'])],
+              [('ok', at('src/i18n.ts'))]);
+          expect(watch.elapsed, lessThan(const Duration(seconds: 5)));
+        });
+
+        // JSX text is code: reading each import clause on to the end of the
+        // words that follow it took 84 seconds over 20,000 of them.
+        test('a page of import words stays linear', () async {
+          final watch = Stopwatch()..start();
+          final wiring = await wiringOf({
+            'package.json': package,
+            'locales/en.json': '{}',
+            'src/i18n.ts': client,
+            'src/page.tsx': "import i18next from 'i18next';\n"
+                "export const Page = () => <p>${'import x, ' * 10000}</p>;\n",
+          });
+          expect([for (final f in wiring) (f['level'], f['subject'])],
+              [('ok', at('src/i18n.ts'))]);
+          expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+        });
+
+        for (final declaration in [
+          "import renamed from 'i18next';\nrenamed",
+          "import { default as renamed } from 'i18next';\nrenamed",
+          "const { default: renamed } = require('i18next');\nrenamed",
+          "import { createInstance } from 'i18next';\nconst \$server = createInstance();\n\$server",
+          "import * as ns from 'i18next';\nns",
+          "import { createInstance as make } from 'i18next';\nmake()",
+          "import { createInstance } from 'i18next';\ncreateInstance({ lng: getLanguage() })",
+          "import { createInstance as make } from 'i18next';\nconst server = make();\nserver",
+          "const { createInstance: make } = require('i18next');\nmake()",
+          "import i18next from 'i18next';\nconst server = i18next.createInstance();\nserver",
+          "import { createInstance, type i18n } from 'i18next';\nconst server: i18n = createInstance();\nserver",
+          "import i18next, { type i18n } from 'i18next';\nexport const server: i18n | null = i18next.createInstance();\nserver",
+          // The annotation of the line above is not the declaration's.
+          "import { createInstance } from 'i18next'\nlet fallback: string\nconst server = createInstance()\nserver",
+        ]) {
+          test('an imported instance is recognized: $declaration', () async {
+            final wiring = await wiringOf({
+              'package.json': package,
+              'locales/en.json': '{}',
+              'src/i18n.ts': client,
+              'src/server.ts': '$declaration.use(Backend).init({});\n',
+            });
+            expect([for (final f in wiring) (f['level'], f['subject'])],
+                [('warn', at('src/server.ts'))]);
+          });
+        }
+
+        test('nested parentheses in a link do not end the chain', () async {
+          final wiring = await wiringOf({
+            'package.json': package,
+            'locales/en.json': '{}',
+            'src/i18n.ts': client,
+            'src/server.ts': "import i18next from 'i18next';\n"
+                "import resourcesToBackend from 'i18next-resources-to-backend';\n"
+                'i18next.use(resourcesToBackend((lng, ns) => '
+                'import(`./locales/\${lng}/\${ns}.json`))).init({});\n',
+          });
+          expect([for (final f in wiring) (f['level'], f['subject'])],
+              [('warn', at('src/server.ts'))]);
+        });
+      });
+
       group('a peer of the plugin', () {
         const tree = {
           'locales/en.json': '{}',
@@ -1463,7 +1792,11 @@ export const appConfig = {
           'lib/l10n/app_en.arb': '{"hello": "Hello"}',
         }, config: 'projectId: proj_abc\nmode: a\nformat: arb\n'
             'output: lib/l10n\nsource: lib/l10n/app_en.arb\n');
-        expect(finding(report, 'source')['level'], 'ok');
+        // What fails is the selection sync makes first (#2456).
+        final source = finding(report, 'source');
+        expect(source['level'], 'fail');
+        expect(source['message'], allOf(startsWith('Declare sourceRoot'),
+            isNot(contains('`format: json`'))));
       });
 
       // The server's rule (`parser_registry.dart`): an object under an
@@ -2007,6 +2340,94 @@ export const appConfig = {
         expect(languages['level'], 'warn');
         expect(languages['message'], startsWith('old/: the project has no '));
         expect(languages['message'], endsWith('delete the directory'));
+      });
+    });
+
+    group('a one-file sourceLayout read as the selection sync refuses (#2456)',
+        () {
+      final meta = MockClient((request) async => request.url.path
+              .endsWith('/meta')
+          ? http.Response(
+              jsonEncode({
+                'baseCode': 'en',
+                'languages': [
+                  {'code': 'en', 'isBase': true},
+                  {'code': 'es', 'isBase': false},
+                ],
+                'formats': ['json'],
+              }),
+              200)
+          : http.Response('{}', 404));
+      const localeFiles = 'projectId: proj_abc\nmode: a\nformat: json\n'
+          'output: public/i18n\nsource: public/i18n/en.json\n'
+          'sourceRoot: public/i18n\nsourceLayout: locale-files\n';
+      // A Transloco scope added after init wrote `locale-files`.
+      final tree = {
+        ..._scopesTree,
+        'package.json': wired['package.json']!,
+        'src/app/app.config.ts': appConfig,
+      };
+
+      /// The doctor report and the sync_preview refusal of one tree.
+      Future<(Map<String, Object?>, Map<String, Object?>)> both(String config,
+          {Map<String, String> files = const {}}) async {
+        await start({...tree, ...files}, config: config, httpClient: meta);
+        final report = (await harness.call('doctor')).structuredContent!;
+        final preview = await harness.call('sync_preview');
+        expect(preview.isError, isTrue);
+        return (report, errorOf(preview));
+      }
+
+      test('locale-files: a second base-language file fails with the refusal '
+          'of the sync, its remedy within the MCP cap', () async {
+        final (report, error) = await both(localeFiles);
+        expect(error['code'], 'several_files_per_locale');
+        final source = finding(report, 'source');
+        expect(source['level'], 'fail');
+        expect(source['subject'], endsWith(p.join('public', 'i18n', 'en.json')));
+        // MCP clips each string of a list at 200 characters (§4.4).
+        final refusal = error['message'] as String;
+        expect(source['message'], '${refusal.substring(0, 200)}…');
+        expect(source['message'], contains('public/i18n/admin/en.json'));
+        final details = source['details'] as List;
+        expect(details, hasLength(1));
+        final remedy = details.single as String;
+        expect(refusal, contains(remedy));
+        expect(remedy, allOf(contains('`sourceLayout: namespaces`'),
+            contains('`sourceLayout: scopes`')));
+        expect(remedy.length, lessThanOrEqualTo(200));
+        expect(failures(report), 1);
+      });
+
+      test('base-tree: the other files under sourceRoot fail as sync refuses '
+          'them', () async {
+        final (report, error) =
+            await both(localeFiles.replaceFirst('locale-files', 'base-tree'));
+        expect(error['code'], 'several_files_per_locale');
+        final source = finding(report, 'source');
+        expect(source['level'], 'fail');
+        expect(source['message'],
+            '${(error['message'] as String).substring(0, 200)}…');
+      });
+
+      test('the selection is refused before the shape of the base file, as '
+          'sync refuses it', () async {
+        final (report, error) = await both(localeFiles,
+            files: {'public/i18n/en.json': '{"home": {"title": "Shop"}}\n'});
+        expect(error['code'], 'several_files_per_locale');
+        expect(finding(report, 'source')['message'],
+            '${(error['message'] as String).substring(0, 200)}…');
+      });
+
+      test('without sourceRoot and sourceLayout the source fails as sync '
+          'refuses', () async {
+        final (report, error) = await both(localeFiles.replaceFirst(
+            'sourceRoot: public/i18n\nsourceLayout: locale-files\n', ''));
+        expect(error['code'], 'catalog_scope_unknown');
+        final source = finding(report, 'source');
+        expect(source['level'], 'fail');
+        expect(source['message'], error['message']);
+        expect(source['details'], isEmpty);
       });
     });
   });
