@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0
+
+- Add a Codex plugin with generated setup and translate skills and the MCP
+  server. Document installation, Agent keys and migration from a manual server.
+- Make workflow references usable in clients that expose skills instead of
+  MCP prompts. Keep both clients' skills identical to the canonical prompts.
+
 ## 1.2.2
 
 The commands and the MCP tools are those of 1.2.1. What changes is where

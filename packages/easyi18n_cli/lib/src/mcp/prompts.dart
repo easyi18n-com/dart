@@ -90,8 +90,8 @@ Goal: take this repository from zero to "ready to translate".
    errors go to the build tools). `credential` warning = step 2 not done.
 6. Show the human what would be translated: extract (Flutter Mode B) or
    sync_preview (file-first); Flutter Mode A has nothing to preview here.
-   Do not push or sync. Hand off: "run the translate prompt to translate and
-   publish".
+   Do not push or sync. Hand off to the translate workflow: show the actual
+   invocation this client exposes (skill or MCP prompt), so the user can run it.
 Do not: edit easyi18n.lock / .easyi18n / assets/easyi18n; add languages by
 editing config (use add_language or the dashboard); push, sync or publish here.
 ''';

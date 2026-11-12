@@ -58,6 +58,9 @@ String renderClientsReadme() {
       ..writeln('```$fence')
       ..writeln(client.snippet(McpRunner.dart))
       ..writeln('```');
+    if (client == McpClient.codex) {
+      out..writeln()..writeln(codexWorkflowNote);
+    }
   }
   return out.toString();
 }
@@ -118,7 +121,7 @@ String renderRegistryServer() => _manifest({
 
 typedef AgentSkill = ({String name, String description, String text});
 
-const _skillsDir = 'claude-code/skills';
+const _skillsDirs = ['claude-code/skills', 'codex/skills'];
 
 // What Claude Code matches a request against to load the skill on its own;
 // the MCP prompt descriptions are for a client's prompt picker instead.
@@ -170,18 +173,39 @@ Map<String, String> renderIntegrations() => {
   'clients/README.md': renderClientsReadme(),
   'gemini-extension.json': renderGeminiExtension(),
   'server.json': renderRegistryServer(),
-  for (final skill in agentSkills())
-    '$_skillsDir/${skill.name}/SKILL.md': renderSkill(skill),
+  'codex/.codex-plugin/plugin.json': _manifest({
+    'name': 'easyi18n',
+    'version': packageVersion,
+    'description': _listingDescription,
+    'skills': './skills/',
+    'mcpServers': './.mcp.json',
+  }),
+  'codex/.mcp.json': _manifest({
+    'mcpServers': {'easyi18n': codexServerConfig(McpRunner.npx)},
+  }),
+  '.agents/plugins/marketplace.json': _manifest({
+    'name': 'easyi18n-com',
+    'plugins': [{
+      'name': 'easyi18n',
+      'source': {'source': 'local', 'path': './codex'},
+      'policy': {'installation': 'AVAILABLE', 'authentication': 'ON_INSTALL'},
+      'category': 'Developer Tools',
+    }],
+  }),
+  for (final skillsDir in _skillsDirs)
+    for (final skill in agentSkills())
+      '$skillsDir/${skill.name}/SKILL.md': renderSkill(skill),
 };
 
 /// Skill files under [root] that no prompt renders any more.
 List<String> _orphanSkills(String root, Map<String, String> expected) {
-  final dir = Directory(p.join(root, _skillsDir));
-  if (!dir.existsSync()) return const [];
   return [
-    for (final file in dir.listSync(recursive: true).whereType<File>())
-      if (p.basename(file.path) == 'SKILL.md')
-        p.posix.joinAll(p.split(p.relative(file.path, from: root))),
+    for (final skillsDir in _skillsDirs)
+      if (Directory(p.join(root, skillsDir)).existsSync())
+        for (final file in Directory(p.join(root, skillsDir))
+            .listSync(recursive: true).whereType<File>())
+          if (p.basename(file.path) == 'SKILL.md')
+            p.posix.joinAll(p.split(p.relative(file.path, from: root))),
   ].where((relative) => !expected.containsKey(relative)).toList()..sort();
 }
 

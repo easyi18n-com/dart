@@ -47,6 +47,28 @@ void main() {
     }
   });
 
+  test('Codex installs two canonical skills and the pinned MCP together', () {
+    final root = write();
+    final manifest = at(root, 'codex/.codex-plugin/plugin.json');
+    expect(manifest.existsSync(), isTrue,
+        reason: 'Codex has no installable workflow entry');
+    final plugin = jsonDecode(manifest.readAsStringSync()) as Map;
+    expect(plugin['name'], 'easyi18n');
+    expect(plugin['version'], packageVersion);
+    expect(plugin['skills'], './skills/');
+    expect(plugin['mcpServers'], './.mcp.json');
+    final mcp = jsonDecode(at(root, 'codex/.mcp.json').readAsStringSync()) as Map;
+    final server = (mcp['mcpServers'] as Map)['easyi18n'] as Map;
+    expect([server['command'], ...(server['args'] as List)], McpRunner.npx.argv);
+    expect(server['startup_timeout_sec'], 60);
+    expect(server['required'], true);
+    expect(server['omit_tools_from'], ['deferred']);
+    for (final prompt in mcpPrompts) {
+      expect(at(root, 'codex/skills/${prompt.prompt.name}/SKILL.md').readAsStringSync(),
+          endsWith('---\n\n${prompt.text}'));
+    }
+  });
+
   test('the Gemini extension starts the server as `mcp config` does', () {
     // Gemini CLI names the server under its extension, so the key is `cli`
     // where the standalone snippet says `easyi18n` (#2737).
@@ -96,7 +118,7 @@ void main() {
     }
     expect(
       files.keys.where((k) => k.endsWith('SKILL.md')),
-      hasLength(mcpPrompts.length),
+      hasLength(mcpPrompts.length * 2),
     );
   });
 
@@ -132,6 +154,27 @@ void main() {
     expect('$err', isNot(contains(readme)));
     expect('$err', contains('dart run tool/gen_agent_integrations.dart'));
   });
+
+  for (final client in ['claude-code', 'codex']) {
+    for (final corruption in ['changed', 'missing', 'orphan']) {
+      test('$client rejects a $corruption skill and regeneration repairs it', () {
+        final root = write();
+        final relative = '$client/skills/${corruption == 'orphan' ? 'obsolete' : 'setup'}/SKILL.md';
+        final file = at(root, relative);
+        if (corruption == 'missing') {
+          file.deleteSync();
+        } else {
+          file..parent.createSync(recursive: true)..writeAsStringSync('changed');
+        }
+        final err = StringBuffer();
+        expect(check(root, err), 1);
+        expect('$err', contains(relative));
+        write();
+        expect(check(root, StringBuffer()), 0);
+        expect(file.existsSync(), corruption != 'orphan');
+      });
+    }
+  }
 
   test('a CRLF checkout of the same files passes', () {
     final root = write();

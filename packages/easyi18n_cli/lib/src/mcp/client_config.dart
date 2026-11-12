@@ -29,6 +29,20 @@ const _projectDir = 'EASYI18N_PROJECT_DIR';
 /// into chats and docs, so `mcp config` does not read `EASYI18N_TOKEN` at all.
 const keyPlaceholder = 'eik_YOUR_AGENT_KEY';
 
+const codexWorkflowNote =
+    'This snippet connects tools only. Install the Codex plugin for setup and '
+    'translate skills: https://docs.easyi18n.com/developers/agents/connect-your-ai#codex-cli';
+
+Map<String, Object?> codexServerConfig(McpRunner runner, {bool agentKey = false}) => {
+  'command': runner.argv.first,
+  'args': [...runner.argv.skip(1), if (agentKey) '--require-agent-key'],
+  if (agentKey) 'env_vars': [_token],
+  // A cold npx download exceeded the client's default ten seconds.
+  'startup_timeout_sec': 60,
+  'required': true,
+  'omit_tools_from': ['deferred'],
+};
+
 /// One MCP client and the snippet that registers the server in it (D9). By
 /// default the snippet carries no key: the server sends this machine's
 /// `easyi18n login` (#2584). With `agentKey` it carries an AI agent key, and a
@@ -126,13 +140,8 @@ enum McpClient {
             '--transport stdio $_server -- ${[command, ...args].join(' ')}',
       codex => [
         '[mcp_servers.$_server]',
-        'command = ${jsonEncode(command)}',
-        'args = [${args.map(jsonEncode).join(', ')}]',
-        if (agentKey) 'env_vars = ["$_token"]',
-        // Codex gives a server 10 s to start; a cold `npx` took 19.9 s.
-        'startup_timeout_sec = 60',
-        'required = true',
-        'omit_tools_from = ["deferred"]',
+        for (final entry in codexServerConfig(runner, agentKey: agentKey).entries)
+          '${entry.key} = ${entry.value is List ? '[${(entry.value as List).map(jsonEncode).join(', ')}]' : jsonEncode(entry.value)}',
       ].join('\n'),
       vscode => _json({
         if (agentKey) 'inputs': [

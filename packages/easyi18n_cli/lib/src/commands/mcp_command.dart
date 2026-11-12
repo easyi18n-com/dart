@@ -135,6 +135,7 @@ class McpConfigCommand extends Command<int> with JsonPresenter {
       return 0;
     }
     output.logger.err.writeln(target);
+    if (client == McpClient.codex) output.logger.err.writeln(codexWorkflowNote);
     if (!agentKey) {
       output.logger.err.writeln("The server sends this machine's easyi18n login. "
           'For CI, or an agent whose spending waits for approval, pass --agent-key.');

@@ -253,6 +253,12 @@ const _known = [
     leftOut: {'xcode', 'android'},
     why: 'an Xcode or Android app needs no wiring',
   ),
+  _Known(
+    'integrations/agents/codex/skills/setup/SKILL.md',
+    'If `scope_snippet` comes back',
+    leftOut: {'xcode', 'android'},
+    why: 'an Xcode or Android app needs no wiring',
+  ),
   _Known('packages/easyi18n_cli/README.md', 'to let the CLI pick'),
   _Known('packages/easyi18n_cli/README.md', 'A Flutter project (`tr()` calls)'),
 ];

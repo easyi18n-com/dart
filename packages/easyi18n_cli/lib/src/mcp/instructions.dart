@@ -43,5 +43,5 @@ Mental model
 - Build/analyze/test belong to other servers.
 Tools: init doctor status authorize extract apply push_preview push
 sync_preview sync fill_status publish rollback pull add_language.
-Per-stack steps: setup/translate prompts.
+Workflows: setup/translate (prompt or skill).
 ''';

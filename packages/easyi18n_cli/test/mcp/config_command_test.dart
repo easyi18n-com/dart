@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:args/command_runner.dart';
 import 'package:easyi18n_cli/easyi18n_cli.dart';
+import 'package:easyi18n_cli/src/mcp/client_config.dart' show codexWorkflowNote;
 import 'package:test/test.dart';
 
 import '../support/transcript.dart';
@@ -187,11 +188,12 @@ void main() {
       expect(err.map((r) => r.line).join('\n'), contains(record['target']));
       expect(err.last.line, "The server sends this machine's easyi18n login. For CI, "
           'or an agent whose spending waits for approval, pass --agent-key.');
+      expect(err.map((r) => r.line), contains(codexWorkflowNote));
       expect(record['target'], 'Append it to ~/.codex/config.toml.');
       final keyed = await _invoke(['mcp', 'config', '--client', 'codex', '--agent-key']);
       expect(keyed.transcript.records.where((r) => r.channel == 'err').map((r) => r.line),
           ['Append it to ~/.codex/config.toml. Codex forwards EASYI18N_TOKEN from the '
-              'shell it runs in.']);
+              'shell it runs in.', codexWorkflowNote]);
     },
   );
 

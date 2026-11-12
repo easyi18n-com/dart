@@ -11,4 +11,4 @@
 /// release someone bumps without touching it, and then `--version` lies, which
 /// is strictly worse than having no flag: the answer looks authoritative
 /// (#695).
-const String packageVersion = '1.2.2';
+const String packageVersion = '1.3.0';
